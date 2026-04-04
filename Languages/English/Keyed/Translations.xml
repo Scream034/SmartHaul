@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LanguageData>
+	<SH.allowCorpses>Allow putting corpses into inventory</SH.allowCorpses>
+	<SH.allowCorpsesTooltip>Default Off. Only carry those directly in hands instead.</SH.allowCorpsesTooltip>
+	<SH.allowAnimals>Allow tamed pack animals using their inventory for hauling</SH.allowAnimals>
+	<SH.allowAnimalsTooltip>Default On. Works best with mods that give backpacks to more animals, like VFME Caravan Packs</SH.allowAnimalsTooltip>
+	<SH.allowMechanoids>Allow hacked mechanoids using their inventory for hauling</SH.allowMechanoids>
+	<SH.allowMechanoidsTooltip>Requires What The Hack or similar mods. Default On.</SH.allowMechanoidsTooltip>
+	<SH.minimumFreeInventorySpace>Minimum free inventory space to consider hauling to inventory</SH.minimumFreeInventorySpace>
+	<SH.minimumFreeInventorySpaceTooltip>Pawns with less free inventory space than defined here just directly use vanilla hauling. 0% makes them always try hauling to inventory, regardless of them having room for more than one potato or not. 100% results in SH requiring pawns to be completely naked. Default 20%</SH.minimumFreeInventorySpaceTooltip>
+</LanguageData>
