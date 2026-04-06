@@ -1,12 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <LanguageData>
-	<SH.allowCorpses>Allow putting corpses into inventory</SH.allowCorpses>
-	<SH.allowCorpsesTooltip>Default Off. Only carry those directly in hands instead.</SH.allowCorpsesTooltip>
-	<SH.allowAnimals>Allow tamed pack animals using their inventory for hauling</SH.allowAnimals>
-	<SH.allowAnimalsTooltip>Default On. Works best with mods that give backpacks to more animals, like VFME Caravan Packs</SH.allowAnimalsTooltip>
-	<SH.allowMechanoids>Allow hacked mechanoids using their inventory for hauling</SH.allowMechanoids>
-	<SH.allowMechanoidsTooltip>Requires What The Hack or similar mods. Default On.</SH.allowMechanoidsTooltip>
-	<SH.minimumFreeInventorySpace>Minimum free inventory space to consider hauling to inventory</SH.minimumFreeInventorySpace>
-	<SH.minimumFreeInventorySpaceTooltip>Pawns with less free inventory space than defined here just directly use vanilla hauling. 0% makes them always try hauling to inventory, regardless of them having room for more than one potato or not. 100% results in SH requiring pawns to be completely naked. Default 20%</SH.minimumFreeInventorySpaceTooltip>
+    <!-- General -->
+    <SH.SettingsGeneral>General Settings</SH.SettingsGeneral>
+    <SH.AllowCorpses>Allow putting corpses into inventory</SH.AllowCorpses>
+    <SH.AllowCorpsesTooltip>Default Off. Only carry those directly in hands instead.</SH.AllowCorpsesTooltip>
+    <SH.AllowAnimals>Allow tamed pack animals to use inventory</SH.AllowAnimals>
+    <SH.AllowAnimalsTooltip>Default On. Works best with mods that give backpacks to animals.</SH.AllowAnimalsTooltip>
+    <SH.AllowMechanoids>Allow mechanoids to use inventory</SH.AllowMechanoids>
+    <SH.AllowMechanoidsTooltip>Requires What The Hack or similar. Default On.</SH.AllowMechanoidsTooltip>
+    <SH.MinFreeInventory>Minimum free inventory space</SH.MinFreeInventory>
+    <SH.MinFreeInventoryTooltip>Pawns with less free space will use vanilla hauling. Default 20%</SH.MinFreeInventoryTooltip>
+
+    <!-- Overlay -->
+    <SH.SettingsOverlay>Visual Overlay</SH.SettingsOverlay>
+    <SH.ShowHaulOverlay>Show haul queue overlay</SH.ShowHaulOverlay>
+    <SH.ShowHaulOverlayTooltip>Shows underline under items being hauled.</SH.ShowHaulOverlayTooltip>
+    <SH.ShowPawnName>Show hauler name</SH.ShowPawnName>
+    <SH.ShowPawnNameTooltip>Shows the name of the pawn hauling each item.</SH.ShowPawnNameTooltip>
+    <SH.PawnNameMaxChars>Max name characters: {0}</SH.PawnNameMaxChars>
+    <SH.OverlayAllFactions>Show for all factions</SH.OverlayAllFactions>
+    <SH.OverlayAllFactionsTooltip>If disabled, only shows for your colonists.</SH.OverlayAllFactionsTooltip>
+
+    <!-- Route -->
+    <SH.SettingsRoute>Route Building</SH.SettingsRoute>
+    <SH.MaxNeighborDistance>Max search distance: {0} cells</SH.MaxNeighborDistance>
+    <SH.MaxCandidates>Max items per trip: {0}</SH.MaxCandidates>
+    <SH.RotUrgentHours>Rot urgency: {0} hours</SH.RotUrgentHours>
+    <SH.WornThreshold>Worn threshold: {0}% HP</SH.WornThreshold>
+
+    <!-- Cooperation -->
+    <SH.SettingsCooperation>Cooperation</SH.SettingsCooperation>
+    <SH.NotifyOtherPawns>Notify other pawns</SH.NotifyOtherPawns>
+    <SH.NotifyOtherPawnsTooltip>When inventory full, notify nearby idle pawns to help.</SH.NotifyOtherPawnsTooltip>
+
+    <!-- Smart Cleanup -->
+    <SH.SettingsSmartCleanup>Smart Cleanup</SH.SettingsSmartCleanup>
+    <SH.SmartCleanup>Respect work priorities</SH.SmartCleanup>
+    <SH.SmartCleanupTooltip>If hauling priority is lower than current work — drop at feet instead of going to storage.</SH.SmartCleanupTooltip>
+    <SH.DropWhenHaulingDisabled>Drop when hauling disabled</SH.DropWhenHaulingDisabled>
+    <SH.DropWhenHaulingDisabledTooltip>If hauling is disabled — drop collected items. Otherwise keep in inventory.</SH.DropWhenHaulingDisabledTooltip>
+
+    <!-- Auto-Haul Triggers -->
+    <SH.SettingsAutoHaul>Auto-Haul After Work</SH.SettingsAutoHaul>
+    
+    <SH.HaulAfterDeconstruct>Haul after deconstruct</SH.HaulAfterDeconstruct>
+    <SH.DeconstructModeAll>All materials</SH.DeconstructModeAll>
+    <SH.DeconstructModeNoChunks>No stone chunks</SH.DeconstructModeNoChunks>
+    <SH.DeconstructModeValuable>Valuable only</SH.DeconstructModeValuable>
+    <SH.RespectWorkPriority>Respect work priority</SH.RespectWorkPriority>
+    <SH.RespectWorkPriorityTooltip>If OFF — always haul to storage. If ON — may drop at feet.</SH.RespectWorkPriorityTooltip>
+
+    <SH.HaulAfterButcher>Haul after butchering</SH.HaulAfterButcher>
+    <SH.ButcherModeAll>All products</SH.ButcherModeAll>
+    <SH.ButcherModePerishable>Perishable only</SH.ButcherModePerishable>
+    <SH.ButcherModeMeat>Meat only</SH.ButcherModeMeat>
+
+    <SH.HaulAfterMining>Haul after mining</SH.HaulAfterMining>
+    <SH.MiningCollectChunks>Collect stone chunks</SH.MiningCollectChunks>
+
+    <SH.HaulAfterHarvest>Haul after harvesting</SH.HaulAfterHarvest>
+
+    <!-- Debug -->
+    <SH.SettingsDebug>Debug (DEV)</SH.SettingsDebug>
+    <SH.TraceLevel>Trace level: {0}</SH.TraceLevel>
 </LanguageData>

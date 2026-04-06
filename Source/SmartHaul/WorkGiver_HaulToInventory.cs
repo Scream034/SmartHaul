@@ -2,268 +2,204 @@
 
 namespace SmartHaul;
 
-public sealed class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
+/// <summary>
+/// WorkGiver that builds multi-item haul jobs.
+/// </summary>
+public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 {
-    /// <summary>
-    /// Maximum distance from current item to next candidate in Phase 1.
-    /// Prevents collecting items across the entire map.
-    /// </summary>
-    private const float MAX_NEIGHBOR_DISTANCE = 30f;
-
-    /// <summary>
-    /// Maximum candidates to collect in Phase 1.
-    /// Prevents excessive route computation.
-    /// </summary>
-    private const int MAX_CANDIDATES = 24;
-
-    /// <summary>
-    /// Minimum search radius in cells.
-    /// </summary>
-    private const float MIN_SEARCH_RANGE = 12f;
-
-    /// <summary>
-    /// Reusable buffer for all haulables in range. Cleared before each use.
-    /// </summary>
     private static readonly List<Thing> _allHaulables = new(64);
-
-    /// <summary>
-    /// Reusable buffer for Phase 1 candidates. Cleared before each use.
-    /// </summary>
     private static readonly List<Thing> _candidates = new(32);
-
-    /// <summary>
-    /// Reusable route buffer. Filled by Phase 2.
-    /// </summary>
     private static readonly List<Thing> _route = new(32);
 
-    /// <summary>
-    /// Identifies a storage destination: either a cell in a slot group or a container Thing.
-    /// </summary>
-    public struct StoreTarget : IEquatable<StoreTarget>
+    private static HashSet<IntVec3>? _skipCells;
+    private static HashSet<Thing>? _skipThings;
+
+    private static readonly Dictionary<int, (Job job, int tick, int thingId)> _jobCache = new();
+    private const int CACHE_TICKS = 30;
+
+    #region StoreTarget
+
+    public readonly struct StoreTarget : IEquatable<StoreTarget>
     {
-        public IntVec3 cell;
-        public Thing container;
+        public readonly IntVec3 Cell;
+        public readonly Thing? Container;
 
-        public readonly IntVec3 Position => container?.Position ?? cell;
+        public StoreTarget(IntVec3 c) { Cell = c; Container = null; }
+        public StoreTarget(Thing t) { Cell = default; Container = t; }
 
-        public StoreTarget(IntVec3 c)
-        {
-            cell = c;
-            container = null;
-        }
+        public bool Equals(StoreTarget o) =>
+            Container == null ? o.Container == null && Cell == o.Cell : Container == o.Container;
 
-        public StoreTarget(Thing t)
-        {
-            cell = default;
-            container = t;
-        }
-
-        public readonly bool Equals(StoreTarget other)
-        {
-            return container == null
-                ? other.container == null && cell == other.cell
-                : container == other.container;
-        }
-
-        public override readonly bool Equals(object obj) => obj is StoreTarget t && Equals(t);
-        public override readonly int GetHashCode() => container?.GetHashCode() ?? cell.GetHashCode();
-        public override readonly string ToString() => container?.ToString() ?? cell.ToString();
-
-        public static bool operator ==(StoreTarget a, StoreTarget b) => a.Equals(b);
-        public static bool operator !=(StoreTarget a, StoreTarget b) => !a.Equals(b);
+        public override bool Equals(object? o) => o is StoreTarget t && Equals(t);
+        public override int GetHashCode() => Container?.GetHashCode() ?? Cell.GetHashCode();
 
         public static implicit operator LocalTargetInfo(StoreTarget t) =>
-            t.container != null ? t.container : t.cell;
-    }
-
-    /// <summary>
-    /// Tracks allocated capacity per storage cell during job building.
-    /// </summary>
-    public sealed class CellAlloc
-    {
-        public Thing thing;
-        public int cap;
-
-        public CellAlloc(Thing t, int c)
-        {
-            thing = t;
-            cap = c;
-        }
-    }
-
-    private static HashSet<IntVec3> _skipCells;
-    private static HashSet<Thing> _skipThings;
-
-    #region Validation
-
-    private static bool ShouldUseSmartHaul(Pawn pawn, Thing thing, bool forced)
-    {
-        if (pawn.Faction != Faction.OfPlayerSilentFail)
-            return false;
-
-        if (!Settings.IsAllowedRace(pawn.RaceProps))
-            return false;
-
-        if (pawn.GetComp<CompHauledToInventory>() == null)
-            return false;
-
-        if (pawn.IsQuestLodger())
-            return false;
-
-        if (GearMassRatio(pawn) >= Settings.MaximumOccupiedCapacityToConsiderHauling)
-            return false;
-
-        if (!thing.Spawned)
-            return false;
-
-        if (thing.IsForbidden(pawn))
-            return false;
-
-        if (!pawn.CanReserve(thing, 1, -1, null, forced))
-            return false;
-
-        if (!Settings.AllowCorpses && thing is Corpse)
-            return false;
-
-        if (thing.IsInValidBestStorage())
-            return false;
-
-        if (MassUtility.WillBeOverEncumberedAfterPickingUp(pawn, thing, 1))
-            return false;
-
-        if (!HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced))
-            return false;
-
-        if (!StoreUtility.TryFindBestBetterStorageFor(
-            thing, pawn, pawn.Map,
-            StoreUtility.CurrentStoragePriorityOf(thing),
-            pawn.Faction, out _, out _, false))
-            return false;
-
-        return true;
-    }
-
-    private static float GearMassRatio(Pawn p)
-    {
-        var cap = MassUtility.Capacity(p);
-        return cap > 0f ? MassUtility.GearMass(p) / cap : 1f;
+            t.Container != null ? new LocalTargetInfo(t.Container) : new LocalTargetInfo(t.Cell);
     }
 
     #endregion
 
-    #region WorkGiver overrides
+    #region WorkGiver Interface
 
-    public override bool ShouldSkip(Pawn pawn, bool forced = false)
-    {
-        if (base.ShouldSkip(pawn, forced))
-            return true;
+    public override bool ShouldSkip(Pawn pawn, bool forced = false) =>
+        base.ShouldSkip(pawn, forced)
+        || pawn.Faction != Faction.OfPlayerSilentFail
+        || !Settings.IsAllowedRace(pawn.RaceProps)
+        || pawn.GetComp<CompHauledToInventory>() == null
+        || pawn.IsQuestLodger()
+        || GetGearRatio(pawn) >= Settings.MaximumOccupiedCapacityToConsiderHauling;
 
-        if (pawn.Faction != Faction.OfPlayerSilentFail)
-            return true;
-
-        if (!Settings.IsAllowedRace(pawn.RaceProps))
-            return true;
-
-        if (pawn.GetComp<CompHauledToInventory>() == null)
-            return true;
-
-        if (pawn.IsQuestLodger())
-            return true;
-
-        if (GearMassRatio(pawn) >= Settings.MaximumOccupiedCapacityToConsiderHauling)
-            return true;
-
-        return false;
-    }
-
-    public override bool HasJobOnThing(Pawn pawn, Thing thing, bool forced = false)
-    {
-        return ShouldUseSmartHaul(pawn, thing, forced);
-    }
+    public override bool HasJobOnThing(Pawn pawn, Thing thing, bool forced = false) =>
+        CanHaul(pawn, thing, forced);
 
     public override Job JobOnThing(Pawn pawn, Thing thing, bool forced = false)
     {
-        if (!ShouldUseSmartHaul(pawn, thing, forced))
-            return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
+        if (!CanHaul(pawn, thing, forced))
+            return Fallback(pawn, thing, forced);
 
-        var map = pawn.Map;
-        var priority = StoreUtility.CurrentStoragePriorityOf(thing);
+        if (!TryGetStore(pawn, thing, out var store))
+            return Fallback(pawn, thing, forced);
 
-        if (!StoreUtility.TryFindBestBetterStorageFor(
-            thing, pawn, map, priority, pawn.Faction,
-            out var targetCell, out var haulDest, true))
-            return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
+        var pawnId = pawn.thingIDNumber;
+        var tick = Find.TickManager.TicksGame;
 
-        StoreTarget store;
-        ThingOwner destOwner = null;
-
-        if (haulDest is ISlotGroupParent)
+        if (_jobCache.TryGetValue(pawnId, out var cached)
+            && cached.thingId == thing.thingIDNumber
+            && tick - cached.tick < CACHE_TICKS
+            && cached.job != null)
         {
-            if (IsHopperCell(thing, targetCell, map))
-                return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
-
-            store = new StoreTarget(targetCell);
-        }
-        else if (haulDest is Thing destThing)
-        {
-            destOwner = destThing.TryGetInnerInteractableThingOwner();
-            if (destOwner == null)
-                return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
-
-            store = new StoreTarget(destThing);
-        }
-        else
-        {
-            return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
+            return cached.job;
         }
 
-        var initialCap = store.container == null
-            ? CapacityAt(thing, store.cell, map)
-            : destOwner.GetCountCanAccept(thing);
+        var job = BuildJob(pawn, thing, store, forced);
+        _jobCache[pawnId] = (job, tick, thing.thingIDNumber);
 
-        if (initialCap <= 0)
-            return HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
+        if (_jobCache.Count > 50)
+        {
+            var stale = _jobCache.Where(kv => tick - kv.Value.tick > CACHE_TICKS * 3).Select(kv => kv.Key).ToList();
+            foreach (var k in stale) _jobCache.Remove(k);
+        }
 
-        return BuildHaulJob(pawn, thing, store, map, forced);
+        return job;
     }
 
     public override IEnumerable<Thing> PotentialWorkThingsGlobal(Pawn pawn)
     {
-        return pawn.Map.listerHaulables.ThingsPotentiallyNeedingHauling();
+        var things = pawn.Map.listerHaulables.ThingsPotentiallyNeedingHauling();
+        var sorted = new List<Thing>(things);
+        sorted.Sort((a, b) => GetPriorityScore(a).CompareTo(GetPriorityScore(b)));
+        return sorted;
     }
 
     #endregion
 
-    #region Job building
+    #region Priority
 
-    /// <summary>
-    /// Builds haul job using two-phase algorithm:
-    /// Phase 1: From 'first', collect nearby candidates via nearest-neighbor (cluster detection)
-    /// Phase 2: From pawn position, build optimal route through candidates via nearest-neighbor
-    /// </summary>
-    private static Job BuildHaulJob(Pawn pawn, Thing first, StoreTarget store, Map map, bool forced)
+    private static int GetPriorityScore(Thing t)
     {
-        // === Collect all valid haulables ===
-        CollectAllHaulables(pawn, first, map);
+        var rot = t.TryGetComp<CompRottable>();
+        if (rot != null)
+        {
+            var ticks = rot.TicksUntilRotAtCurrentTemp;
+            if (ticks < Settings.RotUrgentTicks)
+                return Math.Clamp(ticks * 1000 / Settings.RotUrgentTicks, 0, 999);
+        }
 
-        // === Phase 1: Build candidate cluster from 'first' using nearest-neighbor ===
-        BuildCandidateCluster(first);
+        if (t.def.useHitPoints && t.MaxHitPoints > 0)
+        {
+            var ratio = (float)t.HitPoints / t.MaxHitPoints;
+            if (ratio < Settings.WornThreshold)
+                return 1000 + (int)(ratio * 1000);
+        }
 
-        // === Phase 2: Build pawn route through candidates using nearest-neighbor ===
-        BuildPawnRoute(pawn.Position, first);
+        if (t.TryGetQuality(out var qc))
+            return 2000 + ((int)QualityCategory.Legendary - (int)qc);
 
-        // Trim to carry capacity
-        var carryMass = MassUtility.Capacity(pawn)
-            - MassUtility.GearMass(pawn)
-            - MassUtility.InventoryMass(pawn);
+        return 3000 + (t.thingIDNumber % 1000);
+    }
 
-        TrimToCarryCapacity(carryMass);
+    #endregion
+
+    #region Validation
+
+    private static bool CanHaul(Pawn pawn, Thing thing, bool forced)
+    {
+        if (pawn.Faction != Faction.OfPlayerSilentFail) return false;
+        if (!Settings.IsAllowedRace(pawn.RaceProps)) return false;
+        if (pawn.GetComp<CompHauledToInventory>() == null) return false;
+        if (pawn.IsQuestLodger()) return false;
+        if (GetGearRatio(pawn) >= Settings.MaximumOccupiedCapacityToConsiderHauling) return false;
+        if (!thing.Spawned || thing.IsForbidden(pawn)) return false;
+        if (!pawn.CanReserve(thing, 1, -1, null, forced)) return false;
+        if (!Settings.AllowCorpses && thing is Corpse) return false;
+        if (thing.IsInValidBestStorage()) return false;
+        if (MassUtility.WillBeOverEncumberedAfterPickingUp(pawn, thing, 1)) return false;
+        if (!HaulAIUtility.PawnCanAutomaticallyHaulFast(pawn, thing, forced)) return false;
+        if (ThingProtection.IsProtected(thing)) return false;
+        if (!StoreUtility.TryFindBestBetterStorageFor(thing, pawn, pawn.Map,
+            StoreUtility.CurrentStoragePriorityOf(thing), pawn.Faction, out _, out _, false)) return false;
+        return true;
+    }
+
+    private static float GetGearRatio(Pawn p) =>
+        MassUtility.Capacity(p) > 0f ? MassUtility.GearMass(p) / MassUtility.Capacity(p) : 1f;
+
+    private static Job Fallback(Pawn pawn, Thing thing, bool forced) =>
+        HaulAIUtility.HaulToStorageJob(pawn, thing, forced);
+
+    private static bool TryGetStore(Pawn pawn, Thing thing, out StoreTarget store)
+    {
+        store = default;
+        if (!StoreUtility.TryFindBestBetterStorageFor(thing, pawn, pawn.Map,
+            StoreUtility.CurrentStoragePriorityOf(thing), pawn.Faction, out var cell, out var dest, true))
+            return false;
+
+        if (dest is ISlotGroupParent)
+        {
+            if (IsHopper(thing, cell, pawn.Map)) return false;
+            store = new StoreTarget(cell);
+        }
+        else if (dest is Thing t)
+        {
+            var owner = t.TryGetInnerInteractableThingOwner();
+            if (owner == null || owner.GetCountCanAccept(thing) <= 0) return false;
+            store = new StoreTarget(t);
+        }
+        else return false;
+
+        return true;
+    }
+
+    private static bool IsHopper(Thing thing, IntVec3 cell, Map map)
+    {
+        if (!thing.def.IsNutritionGivingIngestible) return false;
+        if (thing.def.ingestible.preferability is not (FoodPreferability.RawBad or FoodPreferability.RawTasty))
+            return false;
+        return cell.GetThingList(map).Any(t => t.def == ThingDefOf.Hopper);
+    }
+
+    #endregion
+
+    #region Job Building
+
+    private static Job BuildJob(Pawn pawn, Thing first, StoreTarget store, bool forced)
+    {
+        var map = pawn.Map;
+
+        CollectHaulables(pawn, first, map);
+
+        if (forced)
+            BuildDirectionalCluster(pawn.Position, first);
+        else
+            BuildCluster(first);
+
+        BuildRoute(pawn.Position, first);
+        TrimToCapacity(pawn, first);
 
         if (_route.Count == 0)
-            return HaulAIUtility.HaulToStorageJob(pawn, first, forced);
+            return Fallback(pawn, first, forced);
 
-        // Create job
-        var job = JobMaker.MakeJob(SmartHaulJobDefOf.HaulToInventory, null, store);
+        var job = JobMaker.MakeJob(SmartHaulJobDefOf.HaulToInventory, null, (LocalTargetInfo)store);
         job.targetQueueA = new List<LocalTargetInfo>(_route.Count);
         job.targetQueueB = new List<LocalTargetInfo>(4);
         job.countQueue = new List<int>(_route.Count);
@@ -271,233 +207,226 @@ public sealed class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
         _skipCells = new HashSet<IntVec3>();
         _skipThings = new HashSet<Thing>();
 
-        if (store.container != null)
-            _skipThings.Add(store.container);
-        else
-            _skipCells.Add(store.cell);
+        if (store.Container != null) _skipThings.Add(store.Container);
+        else _skipCells.Add(store.Cell);
 
-        var routeFirst = _route[0];
-        var capacity = new Dictionary<StoreTarget, CellAlloc>(4)
+        var capacity = new Dictionary<StoreTarget, (Thing t, int cap)>(4)
         {
-            [store] = new CellAlloc(routeFirst, CapacityAt(routeFirst, store.cell, map))
+            [store] = (_route[0], GetCap(_route[0], store.Cell, map))
         };
 
-        for (var i = 0; i < _route.Count; i++)
-        {
-            AllocateThing(capacity, pawn, _route[i], job);
-        }
+        foreach (var thing in _route)
+            Allocate(capacity, pawn, thing, job);
 
         _skipCells = null;
         _skipThings = null;
 
-        if (job.targetQueueA.Count == 0)
-            return HaulAIUtility.HaulToStorageJob(pawn, first, forced);
+        if (job.targetQueueA.Count > 0 && !job.targetQueueA.Any(t => t.Thing == first))
+        {
+            job.targetQueueA.Insert(0, first);
+            job.countQueue.Insert(0, first.stackCount);
+        }
 
-        return job;
+        return job.targetQueueA.Count > 0 ? job : Fallback(pawn, first, forced);
     }
 
-    /// <summary>
-    /// Collects all haulables that pawn can potentially pick up.
-    /// No distance filter — Phase 1 will select relevant ones.
-    /// </summary>
-    private static void CollectAllHaulables(Pawn pawn, Thing first, Map map)
+    private static void CollectHaulables(Pawn pawn, Thing first, Map map)
     {
         _allHaulables.Clear();
 
+        if (first.Spawned && !first.IsForbidden(pawn))
+            _allHaulables.Add(first);
+
         var dm = map.designationManager;
-        var urgentDef = SmartHaulDesignationDefOf.haulUrgently;
-        var isUrgent = ModCompatibilityCheck.AllowToolIsActive
+        var urgentDef = SmartHaulDesignationDefOf.HaulUrgently;
+        var isUrgent = ModCompatibility.AllowToolIsActive && urgentDef != null
             && dm.DesignationOn(first)?.def == urgentDef;
 
         foreach (var t in map.listerHaulables.ThingsPotentiallyNeedingHauling())
         {
-            if (!t.Spawned)
-                continue;
-
-            if (t.IsForbidden(pawn))
-                continue;
-
-            if (!pawn.CanReserve(t))
-                continue;
-
-            if (!Settings.AllowCorpses && t is Corpse)
-                continue;
-
-            if (t.IsInValidBestStorage())
-                continue;
-
-            if (isUrgent && dm.DesignationOn(t)?.def != urgentDef)
-                continue;
-
+            if (t == first) continue;
+            if (!t.Spawned || t.IsForbidden(pawn) || !pawn.CanReserve(t)) continue;
+            if (!Settings.AllowCorpses && t is Corpse) continue;
+            if (t.IsInValidBestStorage()) continue;
+            if (isUrgent && dm.DesignationOn(t)?.def != urgentDef) continue;
+            if (ThingProtection.IsProtected(t)) continue;
             _allHaulables.Add(t);
         }
     }
 
-    /// <summary>
-    /// Phase 1: Starting from 'first', collect candidates using nearest-neighbor.
-    /// Each step picks the closest item to current position.
-    /// Stops when: max candidates reached, or no items within MAX_NEIGHBOR_DISTANCE.
-    /// Result: _candidates contains a "cluster" of nearby items.
-    /// </summary>
-    private static void BuildCandidateCluster(Thing first)
+    private static void BuildCluster(Thing first)
     {
         _candidates.Clear();
         _candidates.Add(first);
-
-        // Remove first from pool
         _allHaulables.Remove(first);
 
-        if (_allHaulables.Count == 0)
-            return;
+        if (_allHaulables.Count == 0) return;
 
         var current = first.Position;
-        var maxDistSq = MAX_NEIGHBOR_DISTANCE * MAX_NEIGHBOR_DISTANCE;
+        var maxDistSq = Settings.MaxNeighborDistance * Settings.MaxNeighborDistance;
+        var maxItems = Settings.MaxCandidates;
 
-        while (_candidates.Count < MAX_CANDIDATES && _allHaulables.Count > 0)
+        while (_candidates.Count < maxItems && _allHaulables.Count > 0)
         {
             var bestIdx = -1;
-            var bestDistSq = int.MaxValue;
-            var bestId = int.MaxValue;
+            var bestDist = int.MaxValue;
 
-            // Find nearest to current position
             for (var i = 0; i < _allHaulables.Count; i++)
             {
-                var t = _allHaulables[i];
-                var distSq = (t.Position - current).LengthHorizontalSquared;
-
-                // Must be within max distance
-                if (distSq > maxDistSq)
-                    continue;
-
-                // Deterministic tiebreaker
-                if (distSq < bestDistSq || (distSq == bestDistSq && t.thingIDNumber < bestId))
+                var dist = (_allHaulables[i].Position - current).LengthHorizontalSquared;
+                if (dist < bestDist && dist <= maxDistSq)
                 {
-                    bestDistSq = distSq;
+                    bestDist = dist;
                     bestIdx = i;
-                    bestId = t.thingIDNumber;
                 }
             }
 
-            // No more items within range — cluster complete
-            if (bestIdx < 0)
-                break;
+            if (bestIdx < 0) break;
 
             var best = _allHaulables[bestIdx];
             _candidates.Add(best);
             current = best.Position;
 
-            // O(1) swap-remove
-            _allHaulables[bestIdx] = _allHaulables[_allHaulables.Count - 1];
+            _allHaulables[bestIdx] = _allHaulables[^1];
             _allHaulables.RemoveAt(_allHaulables.Count - 1);
         }
 
-        // Clear pool — no longer needed
         _allHaulables.Clear();
     }
 
-    /// <summary>
-    /// Phase 2: Build optimal route from pawn through candidates.
-    /// Uses nearest-neighbor starting from pawn position.
-    /// 'first' is guaranteed to be in _candidates and will be visited.
-    /// Result: _route contains ordered pickup sequence.
-    /// </summary>
-    private static void BuildPawnRoute(IntVec3 pawnPos, Thing first)
+    private static void BuildDirectionalCluster(IntVec3 pawnPos, Thing first)
+    {
+        _candidates.Clear();
+        _candidates.Add(first);
+        _allHaulables.Remove(first);
+
+        if (_allHaulables.Count == 0) return;
+
+        var dirX = first.Position.x - pawnPos.x;
+        var dirZ = first.Position.z - pawnPos.z;
+        var current = first.Position;
+        var maxDistSq = Settings.MaxNeighborDistance * Settings.MaxNeighborDistance;
+        var maxItems = Settings.MaxCandidates;
+
+        while (_candidates.Count < maxItems && _allHaulables.Count > 0)
+        {
+            var bestIdx = -1;
+            var bestScore = float.MaxValue;
+
+            for (var i = 0; i < _allHaulables.Count; i++)
+            {
+                var pos = _allHaulables[i].Position;
+                var dist = (pos - current).LengthHorizontalSquared;
+                if (dist > maxDistSq) continue;
+
+                var toItemX = pos.x - current.x;
+                var toItemZ = pos.z - current.z;
+                var dotProduct = dirX * toItemX + dirZ * toItemZ;
+                var score = dist + (dotProduct > 0 ? 0 : 100);
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestIdx = i;
+                }
+            }
+
+            if (bestIdx < 0) break;
+
+            var best = _allHaulables[bestIdx];
+            _candidates.Add(best);
+            current = best.Position;
+
+            _allHaulables[bestIdx] = _allHaulables[^1];
+            _allHaulables.RemoveAt(_allHaulables.Count - 1);
+        }
+
+        _allHaulables.Clear();
+    }
+
+    private static void BuildRoute(IntVec3 pawnPos, Thing first)
     {
         _route.Clear();
+        if (_candidates.Count == 0) return;
 
-        if (_candidates.Count == 0)
-            return;
+        var firstIdx = _candidates.IndexOf(first);
+        if (firstIdx < 0 && first.Spawned)
+        {
+            _candidates.Insert(0, first);
+            firstIdx = 0;
+        }
+        else if (firstIdx > 0)
+        {
+            (_candidates[0], _candidates[firstIdx]) = (_candidates[firstIdx], _candidates[0]);
+        }
 
-        // WHY: We already have candidates from Phase 1.
-        // Now order them by nearest-neighbor FROM PAWN.
-        var current = pawnPos;
+        _route.Add(_candidates[0]);
+        var current = _candidates[0].Position;
+        _candidates.RemoveAt(0);
 
         while (_candidates.Count > 0)
         {
             var bestIdx = 0;
-            var bestDistSq = int.MaxValue;
-            var bestId = int.MaxValue;
+            var bestDist = int.MaxValue;
 
             for (var i = 0; i < _candidates.Count; i++)
             {
-                var t = _candidates[i];
-                var distSq = (t.Position - current).LengthHorizontalSquared;
-
-                if (distSq < bestDistSq || (distSq == bestDistSq && t.thingIDNumber < bestId))
+                var dist = (_candidates[i].Position - current).LengthHorizontalSquared;
+                if (dist < bestDist)
                 {
-                    bestDistSq = distSq;
+                    bestDist = dist;
                     bestIdx = i;
-                    bestId = t.thingIDNumber;
                 }
             }
 
-            var best = _candidates[bestIdx];
-            _route.Add(best);
-            current = best.Position;
+            _route.Add(_candidates[bestIdx]);
+            current = _candidates[bestIdx].Position;
 
-            // O(1) swap-remove
-            _candidates[bestIdx] = _candidates[_candidates.Count - 1];
+            _candidates[bestIdx] = _candidates[^1];
             _candidates.RemoveAt(_candidates.Count - 1);
         }
     }
 
-    /// <summary>
-    /// Removes items from end of _route that exceed maxMass.
-    /// </summary>
-    private static void TrimToCarryCapacity(float maxMass)
+    private static void TrimToCapacity(Pawn pawn, Thing first)
     {
+        var maxMass = MassUtility.Capacity(pawn) - MassUtility.GearMass(pawn) - MassUtility.InventoryMass(pawn);
         var mass = 0f;
-        var keepCount = 0;
+        var keep = 0;
 
         for (var i = 0; i < _route.Count; i++)
         {
-            var t = _route[i];
-            var stackMass = t.stackCount * t.GetStatValue(StatDefOf.Mass);
+            var m = _route[i].stackCount * _route[i].GetStatValue(StatDefOf.Mass);
 
-            if (mass + stackMass > maxMass && i > 0)
-            {
-                var massPerUnit = t.GetStatValue(StatDefOf.Mass);
-                if (massPerUnit > 0.001f)
-                {
-                    var canTake = (int)((maxMass - mass) / massPerUnit);
-                    if (canTake > 0)
-                        keepCount = i + 1;
-                }
-                break;
-            }
+            if (mass + m > maxMass && i > 0 && _route[i] != first) break;
 
-            mass += stackMass;
-            keepCount = i + 1;
+            mass += m;
+            keep = i + 1;
         }
 
-        if (keepCount < _route.Count)
-            _route.RemoveRange(keepCount, _route.Count - keepCount);
+        if (keep < _route.Count)
+            _route.RemoveRange(keep, _route.Count - keep);
+
+        if (!_route.Contains(first) && first.Spawned)
+            _route.Insert(0, first);
     }
 
     #endregion
 
-    #region Storage allocation
+    #region Allocation
 
-    private static void AllocateThing(
-        Dictionary<StoreTarget, CellAlloc> capacity,
-        Pawn pawn,
-        Thing thing,
-        Job job)
+    private static void Allocate(Dictionary<StoreTarget, (Thing t, int cap)> capacity, Pawn pawn, Thing thing, Job job)
     {
         var map = pawn.Map;
         var store = default(StoreTarget);
         var found = false;
 
-        foreach (var kv in capacity)
+        foreach (var (target, alloc) in capacity)
         {
-            var target = kv.Key;
-            var alloc = kv.Value;
+            var accepts = target.Container != null
+                ? target.Container.TryGetInnerInteractableThingOwner()?.CanAcceptAnyOf(thing) ?? false
+                : target.Cell.GetSlotGroup(map)?.parent.Accepts(thing) ?? false;
 
-            var accepts = target.container != null
-                ? target.container.TryGetInnerInteractableThingOwner()?.CanAcceptAnyOf(thing) ?? false
-                : target.cell.GetSlotGroup(map)?.parent.Accepts(thing) ?? false;
-
-            if (accepts && CanStack(thing, alloc.thing))
+            if (accepts && CanStack(thing, alloc.t))
             {
                 store = target;
                 found = true;
@@ -507,106 +436,68 @@ public sealed class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 
         if (!found)
         {
-            var priority = StoreUtility.CurrentStoragePriorityOf(thing);
-
-            if (!TryFindStorage(thing, pawn, map, priority, out var cell, out var dest, out var owner))
+            if (!FindStorage(thing, pawn, map, out var cell, out var dest, out var owner))
                 return;
 
             if (owner == null)
             {
                 store = new StoreTarget(cell);
                 job.targetQueueB.Add(cell);
-                capacity[store] = new CellAlloc(thing, CapacityAt(thing, cell, map));
+                capacity[store] = (thing, GetCap(thing, cell, map));
             }
             else
             {
-                store = new StoreTarget((Thing)dest);
-                job.targetQueueB.Add((Thing)dest);
-                capacity[store] = new CellAlloc(thing, owner.GetCountCanAccept(thing));
+                store = new StoreTarget((Thing)dest!);
+                job.targetQueueB.Add((Thing)dest!);
+                capacity[store] = (thing, owner.GetCountCanAccept(thing));
             }
         }
 
-        if (!capacity.TryGetValue(store, out var cellAlloc))
-            return;
+        if (!capacity.TryGetValue(store, out var a)) return;
 
-        var count = Math.Min(thing.stackCount, cellAlloc.cap);
-        if (count <= 0)
-            return;
+        var count = Math.Min(thing.stackCount, a.cap);
+        if (count <= 0) return;
 
         job.targetQueueA.Add(thing);
         job.countQueue.Add(count);
-        cellAlloc.cap -= count;
+        capacity[store] = (a.t, a.cap - count);
 
-        if (cellAlloc.cap <= 0)
+        if (capacity[store].cap <= 0)
             capacity.Remove(store);
     }
 
-    private static bool CanStack(Thing a, Thing b)
-    {
-        return a == b
-            || a.CanStackWith(b)
-            || HoldMultipleThings_Support.StackableAt(a, b.Position, a.Map);
-    }
+    private static bool CanStack(Thing a, Thing b) =>
+        a == b || a.CanStackWith(b) || MultiThingsHolderSupport.StackableAt(a, b.Position, a.Map);
 
-    private static bool TryFindStorage(
-        Thing t, Pawn carrier, Map map, StoragePriority currentPriority,
-        out IntVec3 cell, out IHaulDestination dest, out ThingOwner owner)
+    private static bool FindStorage(Thing t, Pawn p, Map map, out IntVec3 cell, out IHaulDestination? dest, out ThingOwner? owner)
     {
         cell = IntVec3.Invalid;
         dest = null;
         owner = null;
 
-        var groups = map.haulDestinationManager.AllGroupsListInPriorityOrder;
+        var prio = StoreUtility.CurrentStoragePriorityOf(t);
 
-        for (var i = 0; i < groups.Count; i++)
+        foreach (var g in map.haulDestinationManager.AllGroupsListInPriorityOrder)
         {
-            var group = groups[i];
-
-            if (group.Settings.Priority <= currentPriority)
-                continue;
-
-            if (!group.parent.Accepts(t))
-                continue;
-
-            foreach (var c in group.CellsList)
+            if (g.Settings.Priority <= prio || !g.parent.Accepts(t)) continue;
+            foreach (var c in g.CellsList)
             {
-                if (_skipCells != null && _skipCells.Contains(c))
-                    continue;
-
-                if (StoreUtility.IsGoodStoreCell(c, map, t, carrier, carrier.Faction))
+                if (_skipCells?.Contains(c) == true) continue;
+                if (StoreUtility.IsGoodStoreCell(c, map, t, p, p.Faction))
                 {
                     cell = c;
-                    dest = group.parent;
+                    dest = g.parent;
                     _skipCells?.Add(c);
                     return true;
                 }
             }
         }
 
-        var nonSlot = map.haulDestinationManager.AllHaulDestinationsListInPriorityOrder;
-
-        for (var i = 0; i < nonSlot.Count; i++)
+        foreach (var d in map.haulDestinationManager.AllHaulDestinationsListInPriorityOrder)
         {
-            var d = nonSlot[i];
-
-            if (d is ISlotGroupParent)
-                continue;
-
-            if (d.GetStoreSettings().Priority <= currentPriority)
-                continue;
-
-            if (!d.Accepts(t))
-                continue;
-
-            if (d is not Thing thing)
-                continue;
-
-            if (_skipThings != null && _skipThings.Contains(thing))
-                continue;
-
-            if (thing.IsForbidden(carrier) || !carrier.CanReserveNew(thing))
-                continue;
-
+            if (d is ISlotGroupParent || d.GetStoreSettings().Priority <= prio || !d.Accepts(t)) continue;
+            if (d is not Thing thing || _skipThings?.Contains(thing) == true) continue;
+            if (thing.IsForbidden(p) || !p.CanReserveNew(thing)) continue;
             dest = d;
             owner = thing.TryGetInnerInteractableThingOwner();
             _skipThings?.Add(thing);
@@ -616,40 +507,14 @@ public sealed class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
         return false;
     }
 
-    #endregion
-
-    #region Helpers
-
-    private static bool IsHopperCell(Thing thing, IntVec3 cell, Map map)
-    {
-        if (!thing.def.IsNutritionGivingIngestible)
-            return false;
-
-        if (thing.def.ingestible.preferability is not (FoodPreferability.RawBad or FoodPreferability.RawTasty))
-            return false;
-
-        foreach (var t in cell.GetThingList(map))
-        {
-            if (t.def == ThingDefOf.Hopper)
-                return true;
-        }
-
-        return false;
-    }
-
-    public static int CapacityAt(Thing thing, IntVec3 cell, Map map)
-    {
-        if (HoldMultipleThings_Support.CapacityAt(thing, cell, map, out var cap))
-            return cap;
-
-        return cell.GetItemStackSpaceLeftFor(map, thing.def);
-    }
+    public static int GetCap(Thing t, IntVec3 c, Map m) =>
+        MultiThingsHolderSupport.CapacityAt(t, c, m, out var cap) ? cap : c.GetItemStackSpaceLeftFor(m, t.def);
 
     #endregion
 }
 
 public static class SmartHaulDesignationDefOf
 {
-    public static readonly DesignationDef haulUrgently =
+    public static readonly DesignationDef? HaulUrgently =
         DefDatabase<DesignationDef>.GetNamedSilentFail("HaulUrgentlyDesignation");
 }

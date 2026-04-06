@@ -2,264 +2,250 @@
 
 namespace SmartHaul;
 
+/// <summary>
+/// Unloads hauled items from inventory to appropriate storage.
+/// Only unloads items tracked by CompHauledToInventory.
+/// </summary>
 public sealed class JobDriver_UnloadYourHauledInventory : JobDriver
 {
-	private int _countToDrop = -1;
-	private int _unloadDuration = 3;
+    private int _countToDrop = -1;
+    private int _unloadDuration = 3;
 
-	public override void ExposeData()
-	{
-		base.ExposeData();
-		Scribe_Values.Look(ref _countToDrop, "countToDrop", -1);
-	}
+    public override void ExposeData()
+    {
+        base.ExposeData();
+        Scribe_Values.Look(ref _countToDrop, "countToDrop", -1);
+    }
 
-	public override bool TryMakePreToilReservations(bool errorOnFailed)
-	{
-		return true;
-	}
+    public override bool TryMakePreToilReservations(bool errorOnFailed) => true;
 
-	public override IEnumerable<Toil> MakeNewToils()
-	{
-		if (ModCompatibilityCheck.ExtendedStorageIsActive)
-		{
-			_unloadDuration = 20;
-		}
+    public override IEnumerable<Toil> MakeNewToils()
+    {
+        if (ModCompatibility.ExtendedStorageIsActive)
+            _unloadDuration = 20;
 
-		var begin = Toils_General.Wait(_unloadDuration);
-		yield return begin;
+        var comp = pawn.TryGetComp<CompHauledToInventory>();
+        if (comp == null) yield break;
 
-		var carriedThings = pawn.TryGetComp<CompHauledToInventory>()?.GetHashSet();
+        var begin = Toils_General.Wait(_unloadDuration);
+        yield return begin;
 
-		if (carriedThings == null)
-		{
-			yield break;
-		}
+        yield return FindTargetOrDrop(comp, begin);
+        yield return PullItemFromInventory(comp, begin);
 
-		yield return FindTargetOrDrop(carriedThings);
-		yield return PullItemFromInventory(carriedThings, begin);
+        var releaseReservation = ReleaseReservation();
+        var carryToCell = Toils_Haul.CarryHauledThingToCell(TargetIndex.B);
 
-		var releaseReservation = ReleaseReservation();
-		var carryToCell = Toils_Haul.CarryHauledThingToCell(TargetIndex.B);
+        yield return Toils_Jump.JumpIf(carryToCell, () => !TargetB.HasThing);
 
-		yield return Toils_Jump.JumpIf(carryToCell, TargetIsCell);
+        var carryToContainer = Toils_Haul.CarryHauledThingToContainer();
+        yield return carryToContainer;
+        yield return Toils_Haul.DepositHauledThingInContainer(TargetIndex.B, TargetIndex.None);
+        yield return Toils_Haul.JumpToCarryToNextContainerIfPossible(carryToContainer, TargetIndex.B);
+        yield return Toils_Jump.Jump(releaseReservation);
 
-		var carryToContainer = Toils_Haul.CarryHauledThingToContainer();
-		yield return carryToContainer;
-		yield return Toils_Haul.DepositHauledThingInContainer(TargetIndex.B, TargetIndex.None);
-		yield return Toils_Haul.JumpToCarryToNextContainerIfPossible(carryToContainer, TargetIndex.B);
-		yield return Toils_Jump.Jump(releaseReservation);
+        yield return carryToCell;
+        yield return Toils_Haul.PlaceHauledThingInCell(TargetIndex.B, carryToCell, true);
 
-		yield return carryToCell;
-		yield return Toils_Haul.PlaceHauledThingInCell(TargetIndex.B, carryToCell, true);
+        yield return releaseReservation;
+        yield return Toils_Jump.Jump(begin);
+    }
 
-		yield return releaseReservation;
-		yield return Toils_Jump.Jump(begin);
-	}
+    private Toil ReleaseReservation()
+    {
+        return new Toil
+        {
+            initAction = () =>
+            {
+                if (pawn.Map.reservationManager.ReservedBy(job.targetB, pawn, pawn.CurJob))
+                    pawn.Map.reservationManager.Release(job.targetB, pawn, pawn.CurJob);
+            }
+        };
+    }
 
-	private bool TargetIsCell()
-	{
-		return !TargetB.HasThing;
-	}
+    private Toil FindTargetOrDrop(CompHauledToInventory comp, Toil loopBack)
+    {
+        return new Toil
+        {
+            initAction = () =>
+            {
+                var inventory = pawn.inventory?.innerContainer;
+                if (inventory == null)
+                {
+                    comp.ClearTracking();
+                    EndJobWith(JobCondition.Succeeded);
+                    return;
+                }
 
-	private Toil ReleaseReservation()
-	{
-		return new Toil
-		{
-			initAction = () =>
-			{
-				if (pawn.Map.reservationManager.ReservedBy(job.targetB, pawn, pawn.CurJob))
-				{
-					pawn.Map.reservationManager.Release(job.targetB, pawn, pawn.CurJob);
-				}
-			}
-		};
-	}
+                SyncTrackedItems(comp, inventory);
 
-	private Toil PullItemFromInventory(HashSet<Thing> carriedThings, Toil wait)
-	{
-		return new Toil
-		{
-			initAction = () =>
-			{
-				var thing = job.GetTarget(TargetIndex.A).Thing;
+                var trackedItems = comp.GetHashSet();
+                Log.Info($"[Unload] FindTargetOrDrop: {trackedItems.Count} tracked items");
 
-				if (thing == null || !pawn.inventory.innerContainer.Contains(thing))
-				{
-					carriedThings.Remove(thing);
-					pawn.jobs.curDriver.JumpToToil(wait);
-					return;
-				}
+                Thing? unloadable = null;
+                foreach (var thing in trackedItems)
+                {
+                    if (thing != null && !thing.Destroyed && inventory.Contains(thing))
+                    {
+                        unloadable = thing;
+                        break;
+                    }
+                }
 
-				if (!pawn.health.capacities.CapableOf(PawnCapacityDefOf.Manipulation)
-					|| !thing.def.EverStorable(false))
-				{
-					Log.Message($"{pawn} incapable, dropping {thing}");
-					pawn.inventory.innerContainer.TryDrop(thing, ThingPlaceMode.Near, _countToDrop, out _);
-					EndJobWith(JobCondition.Succeeded);
-					carriedThings.Remove(thing);
-					return;
-				}
+                if (unloadable == null)
+                {
+                    Log.Info("[Unload] No unloadable items found, ending job");
+                    comp.ClearTracking();
+                    EndJobWith(JobCondition.Succeeded);
+                    return;
+                }
 
-				pawn.inventory.innerContainer.TryTransferToContainer(
-					thing,
-					pawn.carryTracker.innerContainer,
-					_countToDrop,
-					out thing);
+                Log.Info($"[Unload] Trying to find storage for {unloadable.LabelShort} x{unloadable.stackCount}");
 
-				job.count = _countToDrop;
-				job.SetTarget(TargetIndex.A, thing);
-				carriedThings.Remove(thing);
+                if (!StoreUtility.TryFindBestBetterStorageFor(
+                        unloadable, pawn, pawn.Map, StoragePriority.Unstored,
+                        pawn.Faction, out var cell, out var destination))
+                {
+                    HandleNoStorage(unloadable, comp, inventory, loopBack);
+                    return;
+                }
 
-				if (ModCompatibilityCheck.CombatExtendedIsActive)
-				{
-					CompatHelper.UpdateInventory(pawn);
-				}
+                Log.Info($"[Unload] Found storage at {cell} / {destination}");
 
-				thing.SetForbidden(false, false);
-			}
-		};
-	}
+                job.SetTarget(TargetIndex.A, unloadable);
+                job.SetTarget(TargetIndex.B,
+                    cell == IntVec3.Invalid ? (LocalTargetInfo)(Thing)destination! : cell);
 
-	private Toil FindTargetOrDrop(HashSet<Thing> carriedThings)
-	{
-		return new Toil
-		{
-			initAction = () =>
-			{
-				var unloadableThing = FirstUnloadableThing(pawn, carriedThings);
+                if (!pawn.Map.reservationManager.Reserve(pawn, job, job.targetB))
+                {
+                    if (!TryFindAlternativeCell(unloadable, out var altCell)
+                        || !pawn.Map.reservationManager.Reserve(pawn, job, altCell))
+                    {
+                        HandleNoStorage(unloadable, comp, inventory, loopBack);
+                        return;
+                    }
+                    job.SetTarget(TargetIndex.B, altCell);
+                }
 
-				if (unloadableThing.Count == 0)
-				{
-					if (carriedThings.Count == 0)
-					{
-						EndJobWith(JobCondition.Succeeded);
-					}
+                _countToDrop = unloadable.stackCount;
+            }
+        };
+    }
 
-					return;
-				}
+    private static void SyncTrackedItems(CompHauledToInventory comp, ThingOwner inventory)
+    {
+        var trackedItems = comp.GetHashSet();
 
-				var currentPriority = StoragePriority.Unstored;
+        var staleDefs = new HashSet<ThingDef>();
+        foreach (var item in trackedItems)
+        {
+            if (item == null || item.Destroyed || !inventory.Contains(item))
+            {
+                if (item?.def != null) staleDefs.Add(item.def);
+            }
+        }
 
-				if (!StoreUtility.TryFindBestBetterStorageFor(
-					unloadableThing.Thing,
-					pawn,
-					pawn.Map,
-					currentPriority,
-					pawn.Faction,
-					out var cell,
-					out var destination))
-				{
-					Log.Message($"{pawn} no storage for {unloadableThing.Thing}, dropping");
-					pawn.inventory.innerContainer.TryDrop(
-						unloadableThing.Thing,
-						ThingPlaceMode.Near,
-						unloadableThing.Thing.stackCount,
-						out _);
-					EndJobWith(JobCondition.Succeeded);
-					return;
-				}
+        trackedItems.RemoveWhere(t => t == null || t.Destroyed || !inventory.Contains(t));
 
-				job.SetTarget(TargetIndex.A, unloadableThing.Thing);
+        if (staleDefs.Count == 0 || trackedItems.Count == 0)
+        {
+            if (trackedItems.Count == 0) comp.ClearTracking();
+            return;
+        }
 
-				if (cell == IntVec3.Invalid)
-				{
-					job.SetTarget(TargetIndex.B, destination as Thing);
-				}
-				else
-				{
-					job.SetTarget(TargetIndex.B, cell);
-				}
+        foreach (var def in staleDefs)
+        {
+            if (trackedItems.Any(t => t?.def == def)) continue;
 
-				Log.Message($"{pawn} unloading {unloadableThing.Thing} → {job.targetB}");
+            for (var i = 0; i < inventory.Count; i++)
+            {
+                if (inventory[i].def == def && !trackedItems.Contains(inventory[i]))
+                {
+                    comp.RegisterHauledItem(inventory[i]);
+                    break;
+                }
+            }
+        }
+    }
 
-				if (!pawn.Map.reservationManager.Reserve(pawn, job, job.targetB))
-				{
-					// Failed to reserve — try to find alternative cell
-					if (!TryFindAlternativeCell(unloadableThing.Thing, out var altCell))
-					{
-						Log.Message($"{pawn} no alternative storage, dropping {unloadableThing.Thing}");
-						pawn.inventory.innerContainer.TryDrop(
-							unloadableThing.Thing,
-							ThingPlaceMode.Near,
-							unloadableThing.Thing.stackCount,
-							out _);
-						EndJobWith(JobCondition.Incompletable);
-						return;
-					}
+    private void HandleNoStorage(Thing thing, CompHauledToInventory comp, ThingOwner inventory, Toil loopBack)
+    {
+        Log.Info($"[Unload] No storage for {thing.LabelShort}, dropping");
 
-					job.SetTarget(TargetIndex.B, altCell);
+        var thingDef = thing.def;
+        comp.GetHashSet().Remove(thing);
 
-					if (!pawn.Map.reservationManager.Reserve(pawn, job, job.targetB))
-					{
-						Log.Message($"{pawn} failed reserving alternative, dropping {unloadableThing.Thing}");
-						pawn.inventory.innerContainer.TryDrop(
-							unloadableThing.Thing,
-							ThingPlaceMode.Near,
-							unloadableThing.Thing.stackCount,
-							out _);
-						EndJobWith(JobCondition.Incompletable);
-						return;
-					}
-				}
+        inventory.TryDrop(thing, pawn.Position, pawn.Map,
+            ThingPlaceMode.Near, thing.stackCount, out _);
 
-				_countToDrop = unloadableThing.Thing.stackCount;
-			}
-		};
-	}
+        var hasMoreTracked = comp.GetHashSet().Any(t =>
+            t != null && !t.Destroyed && t.def == thingDef && inventory.Contains(t));
 
-	/// <summary>
-	/// Try to find alternative storage cell when primary is unavailable.
-	/// Deterministic: iterates cells in priority order.
-	/// </summary>
-	private bool TryFindAlternativeCell(Thing thing, out IntVec3 cell)
-	{
-		var currentPriority = StoragePriority.Unstored;
+        if (!hasMoreTracked)
+            comp.UntrackDef(thingDef);
 
-		return StoreUtility.TryFindBestBetterStoreCellFor(
-			thing,
-			pawn,
-			pawn.Map,
-			currentPriority,
-			pawn.Faction,
-			out cell);
-	}
+        if (comp.GetHashSet().Count > 0)
+        {
+            Log.Info($"[Unload] {comp.GetHashSet().Count} items remaining, looping back");
+            pawn.jobs.curDriver.JumpToToil(loopBack);
+        }
+        else
+        {
+            Log.Info("[Unload] All items processed, ending job");
+            comp.ClearTracking();
+            EndJobWith(JobCondition.Succeeded);
+        }
+    }
 
-	/// <summary>
-	/// Get first unloadable thing from inventory.
-	/// Deterministic: sorted by category index then defName.
-	/// </summary>
-	private static ThingCount FirstUnloadableThing(Pawn pawn, HashSet<Thing> carriedThings)
-	{
-		var inventory = pawn.inventory.innerContainer;
+    private Toil PullItemFromInventory(CompHauledToInventory comp, Toil wait)
+    {
+        return new Toil
+        {
+            initAction = () =>
+            {
+                var thing = job.GetTarget(TargetIndex.A).Thing;
+                var inventory = pawn.inventory?.innerContainer;
 
-		// Sort deterministically
-		foreach (var thing in carriedThings
-			.OrderBy(t => t.def.FirstThingCategory?.index ?? int.MaxValue)
-			.ThenBy(t => t.def.defName)
-			.ThenBy(t => t.thingIDNumber))
-		{
-			if (!inventory.Contains(thing))
-			{
-				// Merged stack — find by def
-				var stragglerDef = thing.def;
-				carriedThings.Remove(thing);
+                if (thing == null || inventory == null || !inventory.Contains(thing))
+                {
+                    pawn.jobs.curDriver.JumpToToil(wait);
+                    return;
+                }
 
-				for (var i = 0; i < inventory.Count; i++)
-				{
-					var candidate = inventory[i];
+                if (!pawn.health.capacities.CapableOf(PawnCapacityDefOf.Manipulation)
+                    || !thing.def.EverStorable(false))
+                {
+                    comp.GetHashSet().Remove(thing);
+                    inventory.TryDrop(thing, ThingPlaceMode.Near, _countToDrop, out _);
 
-					if (candidate.def == stragglerDef)
-					{
-						return new ThingCount(candidate, candidate.stackCount);
-					}
-				}
+                    var hasMore = comp.GetHashSet().Any(t => t?.def == thing.def);
+                    if (!hasMore) comp.UntrackDef(thing.def);
 
-				continue;
-			}
+                    EndJobWith(JobCondition.Succeeded);
+                    return;
+                }
 
-			return new ThingCount(thing, thing.stackCount);
-		}
+                var thingDef = thing.def;
+                comp.GetHashSet().Remove(thing);
 
-		return default;
-	}
+                inventory.TryTransferToContainer(thing, pawn.carryTracker.innerContainer, _countToDrop, out thing);
+
+                job.count = _countToDrop;
+                job.SetTarget(TargetIndex.A, thing);
+
+                var hasMoreTracked = comp.GetHashSet().Any(t => t?.def == thingDef);
+                if (!hasMoreTracked)
+                    comp.UntrackDef(thingDef);
+
+                if (ModCompatibility.CombatExtendedIsActive)
+                    CompatHelper.UpdateInventory(pawn);
+
+                thing!.SetForbidden(false, false);
+            }
+        };
+    }
+
+    private bool TryFindAlternativeCell(Thing thing, out IntVec3 cell) =>
+        StoreUtility.TryFindBestBetterStoreCellFor(
+            thing, pawn, pawn.Map, StoragePriority.Unstored, pawn.Faction, out cell);
 }

@@ -7,16 +7,20 @@ global using RimWorld;
 
 namespace SmartHaul;
 
+/// <summary>
+/// Mod entry point. Initializes settings.
+/// </summary>
 public sealed class Modbase : Mod
 {
-	public Modbase(ModContentPack content) : base(content)
-	{
-		Instance = this;
-		Settings = GetSettings<Settings>();
-	}
+    public static Modbase Instance { get; private set; } = null!;
+    public static Settings Settings { get; private set; } = null!;
 
-	public override void DoSettingsWindowContents(Rect inRect) => Settings.DoSettingsWindowContents(inRect);
-	public override string SettingsCategory() => "Smart Haul";
-	public static Modbase Instance { get; private set; }
-	public static Settings Settings { get; private set; }
+    public Modbase(ModContentPack content) : base(content)
+    {
+        Instance = this;
+        Settings = GetSettings<Settings>();
+    }
+
+    public override void DoSettingsWindowContents(Rect inRect) => Settings.DoSettingsWindowContents(inRect);
+    public override string SettingsCategory() => "Smart Haul";
 }

@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Build & Run RimWorld",
+            "request": "launch",
+            "type": "node",
+            "runtimeExecutable": "powershell",
+            "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/run_rimworld.ps1", "-Clients", "1"],
+            "preLaunchTask": "Build (Default)",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Build & Run 2 Clients",
+            "request": "launch",
+            "type": "node",
+            "runtimeExecutable": "powershell",
+            "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/run_rimworld.ps1", "-Clients", "2"],
+            "preLaunchTask": "Build (Default)",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Build Only",
+            "request": "launch",
+            "type": "node",
+            "runtimeExecutable": "powershell",
+            "runtimeArgs": ["-Command", "Write-Host 'Build complete!' -ForegroundColor Green"],
+            "preLaunchTask": "Build (Default)",
+            "console": "integratedTerminal"
+        }
+    ]
+}

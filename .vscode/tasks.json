@@ -1,0 +1,66 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Debug",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["build", "${workspaceFolder}/SmartHaul.sln", "-c", "Debug"],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build Release",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["build", "${workspaceFolder}/SmartHaul.sln", "-c", "Release"],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build (Default)",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["build", "${workspaceFolder}/SmartHaul.sln", "-c", "Debug"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Run RimWorld",
+            "type": "process",
+            "command": "powershell",
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/run_rimworld.ps1", "-Clients", "1"],
+            "problemMatcher": [],
+            "isBackground": false
+        },
+        {
+            "label": "Run 2 Clients",
+            "type": "process",
+            "command": "powershell",
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/run_rimworld.ps1", "-Clients", "2"],
+            "problemMatcher": [],
+            "isBackground": false
+        },
+        {
+            "label": "Build & Run",
+            "dependsOn": ["Build (Default)", "Run RimWorld"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Run 2 Clients",
+            "dependsOn": ["Build (Default)", "Run 2 Clients"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Pack Release",
+            "dependsOn": ["Build Release"],
+            "type": "shell",
+            "command": "powershell",
+            "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-Configuration", "Release"],
+            "problemMatcher": []
+        }
+    ]
+}
