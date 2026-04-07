@@ -14,7 +14,7 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
     private static HashSet<IntVec3>? _skipCells;
     private static HashSet<Thing>? _skipThings;
 
-    private static readonly Dictionary<int, (Job job, int tick, int thingId)> _jobCache = new();
+    private static readonly Dictionary<int, (Job job, int tick, int thingId)> _jobCache = [];
     private const int CACHE_TICKS = 30;
 
     #region StoreTarget
@@ -43,7 +43,7 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 
     public override bool ShouldSkip(Pawn pawn, bool forced = false) =>
         base.ShouldSkip(pawn, forced)
-        || pawn.Faction != Faction.OfPlayerSilentFail
+        || pawn.Faction == null || !pawn.Faction.IsPlayer
         || !Settings.IsAllowedRace(pawn.RaceProps)
         || pawn.GetComp<CompHauledToInventory>() == null
         || pawn.IsQuestLodger()
@@ -124,7 +124,8 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
 
     private static bool CanHaul(Pawn pawn, Thing thing, bool forced)
     {
-        if (pawn.Faction != Faction.OfPlayerSilentFail) return false;
+        // WHY: Faction.OfPlayerSilentFail is local-only in MP
+        if (pawn.Faction == null || !pawn.Faction.IsPlayer) return false;
         if (!Settings.IsAllowedRace(pawn.RaceProps)) return false;
         if (pawn.GetComp<CompHauledToInventory>() == null) return false;
         if (pawn.IsQuestLodger()) return false;
@@ -204,8 +205,8 @@ public class WorkGiver_HaulToInventory : WorkGiver_HaulGeneral
         job.targetQueueB = new List<LocalTargetInfo>(4);
         job.countQueue = new List<int>(_route.Count);
 
-        _skipCells = new HashSet<IntVec3>();
-        _skipThings = new HashSet<Thing>();
+        _skipCells = [];
+        _skipThings = [];
 
         if (store.Container != null) _skipThings.Add(store.Container);
         else _skipCells.Add(store.Cell);

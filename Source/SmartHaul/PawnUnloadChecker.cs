@@ -7,7 +7,9 @@ public static class PawnUnloadChecker
 {
     public static void CheckIfPawnShouldUnloadInventory(Pawn pawn, bool prioritize = false)
     {
-        if (pawn?.Map == null || pawn.Drafted) return;
+        // WHY: pawn.Faction.IsPlayer works for all player factions in MP
+        if (pawn?.Faction == null || !pawn.Faction.IsPlayer) return;
+        if (pawn.Map == null || pawn.Drafted) return;
 
         var comp = pawn.GetComp<CompHauledToInventory>();
         if (comp == null || comp.GetHashSet().Count == 0) return;

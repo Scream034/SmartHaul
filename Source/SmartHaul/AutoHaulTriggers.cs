@@ -106,7 +106,7 @@ public static class AutoHaulTriggers
                 if (inventory[i].def == thingDef)
                     comp.RegisterHauledItem(inventory[i]);
             }
-            
+
             // Remove protection since it's now in inventory
             ThingProtection.Unprotect(thing);
             return true;
@@ -120,18 +120,54 @@ public static class AutoHaulTriggers
 
     /// <summary>
     /// Checks whether inventory should be unloaded now.
+    /// For recipe work, uses a lower threshold to allow batch processing.
     /// </summary>
-    public static void CheckAndUnload(Pawn pawn, WorkTypeDef? workType, bool hasMoreWork)
+    /// <param name="pawn">Pawn to check.</param>
+    /// <param name="workType">Current work type for priority check.</param>
+    /// <param name="isRecipeWork">If true, uses recipe threshold instead of forcing unload.</param>
+    public static void CheckAndUnload(Pawn pawn, WorkTypeDef? workType, bool isRecipeWork = false)
     {
         if (pawn?.Map == null) return;
 
         var comp = pawn.GetComp<CompHauledToInventory>();
         if (comp == null || comp.GetHashSet().Count == 0) return;
 
-        if (IsInventoryNearlyFull(pawn) || !hasMoreWork)
+        if (isRecipeWork)
         {
-            ExecuteHaulOrDrop(pawn, ShouldHaulToStorage(pawn, workType));
+            // WHY: For recipes (butcher), only unload when inventory is getting heavy.
+            // This lets pawn process multiple carcasses before hauling.
+            if (IsInventoryAboveThreshold(pawn, Settings.RecipeUnloadThreshold))
+                ExecuteHaulOrDrop(pawn, ShouldHaulToStorage(pawn, workType));
         }
+        else
+        {
+            // Non-recipe work: unload when full
+            if (IsInventoryNearlyFull(pawn))
+                ExecuteHaulOrDrop(pawn, ShouldHaulToStorage(pawn, workType));
+        }
+    }
+
+    /// <summary>
+    /// Checks if pawn inventory is nearly full (90%+ capacity).
+    /// </summary>
+    public static bool IsInventoryNearlyFull(Pawn pawn)
+    {
+        var capacity = MassUtility.Capacity(pawn);
+        if (capacity <= 0f) return true;
+        return (MassUtility.GearMass(pawn) + MassUtility.InventoryMass(pawn)) / capacity >= 0.9f;
+    }
+
+    /// <summary>
+    /// Checks if pawn inventory exceeds a given threshold.
+    /// </summary>
+    /// <param name="pawn">Pawn to check.</param>
+    /// <param name="threshold">Fraction of capacity (0.0 - 1.0).</param>
+    /// <returns>True if above threshold.</returns>
+    public static bool IsInventoryAboveThreshold(Pawn pawn, float threshold)
+    {
+        var capacity = MassUtility.Capacity(pawn);
+        if (capacity <= 0f) return true;
+        return (MassUtility.GearMass(pawn) + MassUtility.InventoryMass(pawn)) / capacity >= threshold;
     }
 
     #endregion
@@ -150,7 +186,7 @@ public static class AutoHaulTriggers
         if (!Settings.HaulAfterDeconstruct) return;
         if (!CanPawnAutoHaul(pawn, out _)) return;
 
-        var shouldGoToStorage = !Settings.DeconstructCheckPriority || 
+        var shouldGoToStorage = !Settings.DeconstructCheckPriority ||
                                 ShouldHaulToStorage(pawn, WorkTypeDefOf.Construction);
         var hasMoreWork = HasJobsOfTypes(pawn, JobDefOf.Deconstruct, JobDefOf.Mine);
 
@@ -175,7 +211,7 @@ public static class AutoHaulTriggers
         if (!Settings.HaulAfterMining) return;
         if (!CanPawnAutoHaul(pawn, out _)) return;
 
-        var shouldGoToStorage = !Settings.MiningCheckPriority || 
+        var shouldGoToStorage = !Settings.MiningCheckPriority ||
                                 ShouldHaulToStorage(pawn, WorkTypeDefOf.Mining);
         var hasMoreWork = HasJobsOfTypes(pawn, JobDefOf.Mine);
 
@@ -436,31 +472,31 @@ public static class AutoHaulTriggers
     {
         var queue = pawn.jobs?.jobQueue;
         if (queue == null) return false;
-        
+
         foreach (var qj in queue)
         {
-            if (qj.job?.def != null && defs.Contains(qj.job.def)) 
+            if (qj.job?.def != null && defs.Contains(qj.job.def))
                 return true;
         }
         return false;
-    }
-
-    public static bool IsInventoryNearlyFull(Pawn pawn)
-    {
-        var capacity = MassUtility.Capacity(pawn);
-        if (capacity <= 0f) return true;
-        return (MassUtility.GearMass(pawn) + MassUtility.InventoryMass(pawn)) / capacity >= 0.9f;
     }
 
     public static bool IsChunk(Thing thing) =>
         thing.def.thingCategories?.Contains(ThingCategoryDefOf.Chunks) == true ||
         thing.def.thingCategories?.Contains(ThingCategoryDefOf.StoneChunks) == true;
 
+    /// <summary>
+    /// Validates that pawn can perform auto-hauling.
+    /// Uses IsColonistPlayerControlled for MP compatibility —
+    /// Faction.OfPlayer only returns the local player's faction.
+    /// </summary>
     private static bool CanPawnAutoHaul(Pawn pawn, out string reason)
     {
         reason = "";
         if (pawn.Map == null || pawn.Dead || pawn.Downed) { reason = "invalid state"; return false; }
-        if (pawn.Faction != Faction.OfPlayer) { reason = "not player faction"; return false; }
+        // WHY: In MP, Faction.OfPlayer is the LOCAL player's faction only.
+        // pawn.Faction.IsPlayer covers all human player factions.
+        if (pawn.Faction == null || !pawn.Faction.IsPlayer) { reason = "not player faction"; return false; }
         if (!Settings.IsAllowedRace(pawn.RaceProps)) { reason = "race not allowed"; return false; }
         if (pawn.GetComp<CompHauledToInventory>() == null) { reason = "no comp"; return false; }
         return true;

@@ -32,6 +32,7 @@ public class Settings : ModSettings
     private static bool _haulAfterButcher = true;
     private static ButcherHaulMode _butcherMode = ButcherHaulMode.All;
     private static bool _butcherCheckPriority;
+    private static float _recipeUnloadThreshold = 0.5f;
 
     private static bool _haulAfterMining = true;
     private static bool _miningCollectChunks;
@@ -39,6 +40,8 @@ public class Settings : ModSettings
 
     private static bool _haulAfterHarvest = true;
     private static bool _harvestCheckPriority;
+
+    private static bool _dropNearStorage = true;
 
     private static bool _smartCleanup = true;
     private static bool _dropWhenHaulingDisabled;
@@ -52,7 +55,7 @@ public class Settings : ModSettings
 
     /// <summary>What to collect after deconstruction.</summary>
     public enum DeconstructHaulMode { All, NoChunks, Valuable }
-    
+
     /// <summary>What to collect after butchering.</summary>
     public enum ButcherHaulMode { All, PerishableOnly, MeatOnly }
 
@@ -62,37 +65,37 @@ public class Settings : ModSettings
 
     /// <summary>Whether to allow corpses in inventory.</summary>
     public static bool AllowCorpses => _allowCorpses;
-    
+
     /// <summary>Whether pack animals can use inventory for hauling.</summary>
     public static bool AllowAnimals => _allowAnimals;
-    
+
     /// <summary>Whether mechanoids can use inventory for hauling.</summary>
     public static bool AllowMechanoids => _allowMechanoids;
-    
+
     /// <summary>Max gear ratio before falling back to vanilla hauling.</summary>
     public static float MaximumOccupiedCapacityToConsiderHauling => _maxCapacity;
 
     /// <summary>Whether to show haul queue overlay on items.</summary>
     public static bool ShowHaulOverlay => _showHaulOverlay;
-    
+
     /// <summary>Whether to show hauler name under items.</summary>
     public static bool ShowPawnName => _showPawnName;
-    
+
     /// <summary>Max characters to show for pawn name.</summary>
     public static int PawnNameMaxChars => _pawnNameMaxChars;
-    
+
     /// <summary>Whether to show overlay for non-player pawns.</summary>
     public static bool OverlayAllFactions => _overlayAllFactions;
 
     /// <summary>Max distance to search for nearby items.</summary>
     public static float MaxNeighborDistance => _maxNeighborDistance;
-    
+
     /// <summary>Max items to collect per trip.</summary>
     public static int MaxCandidates => _maxCandidates;
-    
+
     /// <summary>Ticks until rot is considered urgent.</summary>
     public static int RotUrgentTicks => _rotUrgentHours * 2500;
-    
+
     /// <summary>HP ratio below which item is considered worn.</summary>
     public static float WornThreshold => _wornThreshold;
 
@@ -101,40 +104,48 @@ public class Settings : ModSettings
 
     /// <summary>Whether to auto-haul after deconstruction.</summary>
     public static bool HaulAfterDeconstruct => _haulAfterDeconstruct;
-    
+
     /// <summary>What to collect after deconstruction.</summary>
     public static DeconstructHaulMode DeconstructMode => _deconstructMode;
-    
+
     /// <summary>Whether to check work priority for deconstruction.</summary>
     public static bool DeconstructCheckPriority => _deconstructCheckPriority;
 
     /// <summary>Whether to auto-haul after butchering.</summary>
     public static bool HaulAfterButcher => _haulAfterButcher;
-    
+
     /// <summary>What to collect after butchering.</summary>
     public static ButcherHaulMode ButcherMode => _butcherMode;
-    
+
     /// <summary>Whether to check work priority for butchering.</summary>
     public static bool ButcherCheckPriority => _butcherCheckPriority;
 
+    /// <summary>Inventory fill fraction at which pawn unloads during recipe work (butcher etc).</summary>
+    public static float RecipeUnloadThreshold => _recipeUnloadThreshold;
+
     /// <summary>Whether to auto-haul after mining.</summary>
     public static bool HaulAfterMining => _haulAfterMining;
-    
+
     /// <summary>Whether to collect stone chunks when mining.</summary>
     public static bool MiningCollectChunks => _miningCollectChunks;
-    
+
     /// <summary>Whether to check work priority for mining.</summary>
     public static bool MiningCheckPriority => _miningCheckPriority;
 
     /// <summary>Whether to auto-haul after harvesting.</summary>
     public static bool HaulAfterHarvest => _haulAfterHarvest;
-    
+
     /// <summary>Whether to check work priority for harvesting.</summary>
     public static bool HarvestCheckPriority => _harvestCheckPriority;
 
+    /// <summary>
+    /// When storage is full, drop items near the storage zone instead of at pawn's feet.
+    /// </summary>
+    public static bool DropNearStorage => _dropNearStorage;
+
     /// <summary>Whether to drop items when hauling priority is lower than current work.</summary>
     public static bool SmartCleanup => _smartCleanup;
-    
+
     /// <summary>Whether to drop items when hauling is disabled entirely.</summary>
     public static bool DropWhenHaulingDisabled => _dropWhenHaulingDisabled;
 
@@ -169,13 +180,13 @@ public class Settings : ModSettings
 
         // === General ===
         ls.Label($"--- {"SH.SettingsGeneral".Translate()} ---");
-        ls.CheckboxLabeled("SH.AllowCorpses".Translate(), ref _allowCorpses, 
+        ls.CheckboxLabeled("SH.AllowCorpses".Translate(), ref _allowCorpses,
             "SH.AllowCorpsesTooltip".Translate());
-        ls.CheckboxLabeled("SH.AllowAnimals".Translate(), ref _allowAnimals, 
+        ls.CheckboxLabeled("SH.AllowAnimals".Translate(), ref _allowAnimals,
             "SH.AllowAnimalsTooltip".Translate());
-        ls.CheckboxLabeled("SH.AllowMechanoids".Translate(), ref _allowMechanoids, 
+        ls.CheckboxLabeled("SH.AllowMechanoids".Translate(), ref _allowMechanoids,
             "SH.AllowMechanoidsTooltip".Translate());
-        ls.Label("SH.MinFreeInventory".Translate() + $": {(1f - _maxCapacity) * 100f:F0}%", 
+        ls.Label("SH.MinFreeInventory".Translate() + $": {(1f - _maxCapacity) * 100f:F0}%",
             tooltip: "SH.MinFreeInventoryTooltip".Translate());
         _maxCapacity = 1f - ls.Slider(1f - _maxCapacity, 0f, 1f);
 
@@ -183,18 +194,18 @@ public class Settings : ModSettings
 
         // === Overlay ===
         ls.Label($"--- {"SH.SettingsOverlay".Translate()} ---");
-        ls.CheckboxLabeled("SH.ShowHaulOverlay".Translate(), ref _showHaulOverlay, 
+        ls.CheckboxLabeled("SH.ShowHaulOverlay".Translate(), ref _showHaulOverlay,
             "SH.ShowHaulOverlayTooltip".Translate());
         if (_showHaulOverlay)
         {
-            ls.CheckboxLabeled("  " + "SH.ShowPawnName".Translate(), ref _showPawnName, 
+            ls.CheckboxLabeled("  " + "SH.ShowPawnName".Translate(), ref _showPawnName,
                 "SH.ShowPawnNameTooltip".Translate());
             if (_showPawnName)
             {
                 ls.Label("  " + "SH.PawnNameMaxChars".Translate(_pawnNameMaxChars));
                 _pawnNameMaxChars = (int)ls.Slider(_pawnNameMaxChars, 3, 24);
             }
-            ls.CheckboxLabeled("  " + "SH.OverlayAllFactions".Translate(), ref _overlayAllFactions, 
+            ls.CheckboxLabeled("  " + "SH.OverlayAllFactions".Translate(), ref _overlayAllFactions,
                 "SH.OverlayAllFactionsTooltip".Translate());
         }
 
@@ -215,19 +226,24 @@ public class Settings : ModSettings
 
         // === Cooperation ===
         ls.Label($"--- {"SH.SettingsCooperation".Translate()} ---");
-        ls.CheckboxLabeled("SH.NotifyOtherPawns".Translate(), ref _notifyOtherPawns, 
+        ls.CheckboxLabeled("SH.NotifyOtherPawns".Translate(), ref _notifyOtherPawns,
             "SH.NotifyOtherPawnsTooltip".Translate());
 
         ls.GapLine();
 
         // === Smart Cleanup ===
         ls.Label($"--- {"SH.SettingsSmartCleanup".Translate()} ---");
-        ls.CheckboxLabeled("SH.SmartCleanup".Translate(), ref _smartCleanup, 
+        ls.CheckboxLabeled("SH.SmartCleanup".Translate(), ref _smartCleanup,
             "SH.SmartCleanupTooltip".Translate());
-        ls.CheckboxLabeled("SH.DropWhenHaulingDisabled".Translate(), ref _dropWhenHaulingDisabled, 
+        ls.CheckboxLabeled("SH.DropWhenHaulingDisabled".Translate(), ref _dropWhenHaulingDisabled,
             "SH.DropWhenHaulingDisabledTooltip".Translate());
 
         ls.GapLine();
+
+        // === Fallback Behavior ===
+        ls.Label($"--- {"SH.SettingsFallback".Translate()} ---");
+        ls.CheckboxLabeled("SH.DropNearStorage".Translate(), ref _dropNearStorage,
+            "SH.DropNearStorageTooltip".Translate());
 
         // === Auto-Haul Triggers ===
         ls.Label($"--- {"SH.SettingsAutoHaul".Translate()} ---");
@@ -236,16 +252,16 @@ public class Settings : ModSettings
         ls.CheckboxLabeled("SH.HaulAfterDeconstruct".Translate(), ref _haulAfterDeconstruct);
         if (_haulAfterDeconstruct)
         {
-            if (ls.RadioButton("  " + "SH.DeconstructModeAll".Translate(), 
+            if (ls.RadioButton("  " + "SH.DeconstructModeAll".Translate(),
                 _deconstructMode == DeconstructHaulMode.All))
                 _deconstructMode = DeconstructHaulMode.All;
-            if (ls.RadioButton("  " + "SH.DeconstructModeNoChunks".Translate(), 
+            if (ls.RadioButton("  " + "SH.DeconstructModeNoChunks".Translate(),
                 _deconstructMode == DeconstructHaulMode.NoChunks))
                 _deconstructMode = DeconstructHaulMode.NoChunks;
-            if (ls.RadioButton("  " + "SH.DeconstructModeValuable".Translate(), 
+            if (ls.RadioButton("  " + "SH.DeconstructModeValuable".Translate(),
                 _deconstructMode == DeconstructHaulMode.Valuable))
                 _deconstructMode = DeconstructHaulMode.Valuable;
-            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _deconstructCheckPriority, 
+            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _deconstructCheckPriority,
                 "SH.RespectWorkPriorityTooltip".Translate());
         }
 
@@ -255,16 +271,18 @@ public class Settings : ModSettings
         ls.CheckboxLabeled("SH.HaulAfterButcher".Translate(), ref _haulAfterButcher);
         if (_haulAfterButcher)
         {
-            if (ls.RadioButton("  " + "SH.ButcherModeAll".Translate(), 
+            if (ls.RadioButton("  " + "SH.ButcherModeAll".Translate(),
                 _butcherMode == ButcherHaulMode.All))
                 _butcherMode = ButcherHaulMode.All;
-            if (ls.RadioButton("  " + "SH.ButcherModePerishable".Translate(), 
+            if (ls.RadioButton("  " + "SH.ButcherModePerishable".Translate(),
                 _butcherMode == ButcherHaulMode.PerishableOnly))
                 _butcherMode = ButcherHaulMode.PerishableOnly;
-            if (ls.RadioButton("  " + "SH.ButcherModeMeat".Translate(), 
+            if (ls.RadioButton("  " + "SH.ButcherModeMeat".Translate(),
                 _butcherMode == ButcherHaulMode.MeatOnly))
                 _butcherMode = ButcherHaulMode.MeatOnly;
-            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _butcherCheckPriority, 
+            ls.Label("SH.RecipeUnloadThreshold".Translate($"{_recipeUnloadThreshold * 100f:F0}"));
+            _recipeUnloadThreshold = ls.Slider(_recipeUnloadThreshold, 0.3f, 0.9f);
+            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _butcherCheckPriority,
                 "SH.RespectWorkPriorityTooltip".Translate());
         }
 
@@ -275,7 +293,7 @@ public class Settings : ModSettings
         if (_haulAfterMining)
         {
             ls.CheckboxLabeled("  " + "SH.MiningCollectChunks".Translate(), ref _miningCollectChunks);
-            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _miningCheckPriority, 
+            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _miningCheckPriority,
                 "SH.RespectWorkPriorityTooltip".Translate());
         }
 
@@ -285,7 +303,7 @@ public class Settings : ModSettings
         ls.CheckboxLabeled("SH.HaulAfterHarvest".Translate(), ref _haulAfterHarvest);
         if (_haulAfterHarvest)
         {
-            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _harvestCheckPriority, 
+            ls.CheckboxLabeled("  " + "SH.RespectWorkPriority".Translate(), ref _harvestCheckPriority,
                 "SH.RespectWorkPriorityTooltip".Translate());
         }
 
@@ -343,6 +361,8 @@ public class Settings : ModSettings
 
         Scribe_Values.Look(ref _haulAfterHarvest, "haulAfterHarvest", true);
         Scribe_Values.Look(ref _harvestCheckPriority, "harvestCheckPriority");
+
+        Scribe_Values.Look(ref _dropNearStorage, "dropNearStorage", true);
 
         Scribe_Values.Look(ref _smartCleanup, "smartCleanup", true);
         Scribe_Values.Look(ref _dropWhenHaulingDisabled, "dropWhenHaulingDisabled");

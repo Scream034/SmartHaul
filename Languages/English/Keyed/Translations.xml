@@ -54,11 +54,16 @@
     <SH.ButcherModeAll>All products</SH.ButcherModeAll>
     <SH.ButcherModePerishable>Perishable only</SH.ButcherModePerishable>
     <SH.ButcherModeMeat>Meat only</SH.ButcherModeMeat>
+    <SH.RecipeUnloadThreshold>Unload after recipe at: {0}% full</SH.RecipeUnloadThreshold>
 
     <SH.HaulAfterMining>Haul after mining</SH.HaulAfterMining>
     <SH.MiningCollectChunks>Collect stone chunks</SH.MiningCollectChunks>
 
     <SH.HaulAfterHarvest>Haul after harvesting</SH.HaulAfterHarvest>
+
+    <SH.SettingsFallback>Fallback Behavior</SH.SettingsFallback>
+    <SH.DropNearStorage>Use last known storage position</SH.DropNearStorage>
+    <SH.DropNearStorageTooltip>When storage is full, try to carry items to the last position where this item type was successfully stored. If disabled, items are dropped at pawn's feet.</SH.DropNearStorageTooltip>
 
     <!-- Debug -->
     <SH.SettingsDebug>Debug (DEV)</SH.SettingsDebug>

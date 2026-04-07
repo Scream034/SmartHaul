@@ -12,8 +12,8 @@
 /// </summary>
 public sealed class CompHauledToInventory : ThingComp
 {
-    private HashSet<Thing> _items = new();
-    private HashSet<ThingDef> _trackedDefs = new();
+    private HashSet<Thing> _items = [];
+    private HashSet<ThingDef> _trackedDefs = [];
 
     /// <summary>
     /// Returns tracked items set, cleaning null/destroyed references first.
@@ -63,7 +63,7 @@ public sealed class CompHauledToInventory : ThingComp
         base.PostExposeData();
         Scribe_Collections.Look(ref _items, "ThingsHauledToInventory", LookMode.Reference);
         Scribe_Collections.Look(ref _trackedDefs, "TrackedDefs", LookMode.Def);
-        _items ??= new HashSet<Thing>();
-        _trackedDefs ??= new HashSet<ThingDef>();
+        _items ??= [];
+        _trackedDefs ??= [];
     }
 }

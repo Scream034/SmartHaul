@@ -25,5 +25,5 @@
 This mod makes pawns haul things more intelligently. When hauling things to a stockpile, they will pick up all available items on the way, up to their carrying capacity. This makes hauling much more efficient. Highlight.
 
 </description>
-	<modVersion IgnoreIfNoMatchingField="True">1.1.0</modVersion>
+	<modVersion IgnoreIfNoMatchingField="True">1.1.1</modVersion>
 </ModMetaData>

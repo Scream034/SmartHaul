@@ -54,11 +54,16 @@
     <SH.ButcherModeAll>Все продукты</SH.ButcherModeAll>
     <SH.ButcherModePerishable>Только скоропортящееся</SH.ButcherModePerishable>
     <SH.ButcherModeMeat>Только мясо</SH.ButcherModeMeat>
+    <SH.RecipeUnloadThreshold>Разгрузка после рецепта при: {0}% заполнения</SH.RecipeUnloadThreshold>
 
     <SH.HaulAfterMining>Собирать после добычи</SH.HaulAfterMining>
     <SH.MiningCollectChunks>Собирать каменные обломки</SH.MiningCollectChunks>
 
     <SH.HaulAfterHarvest>Собирать после сбора урожая</SH.HaulAfterHarvest>
+
+    <SH.SettingsFallback>Поведение при переполнении</SH.SettingsFallback>
+    <SH.DropNearStorage>Использовать последнюю известную позицию склада</SH.DropNearStorage>
+    <SH.DropNearStorageTooltip>Когда склад полон, пытаться нести предметы к последней позиции, где этот тип предметов был успешно сохранён. Если отключено, предметы сбрасываются под ноги.</SH.DropNearStorageTooltip>
 
     <!-- Debug -->
     <SH.SettingsDebug>Отладка (DEV)</SH.SettingsDebug>

@@ -11,6 +11,9 @@ public sealed class JobDriver_UnloadYourHauledInventory : JobDriver
     private int _countToDrop = -1;
     private int _unloadDuration = 3;
 
+    // WHY: Cache last known GOOD storage position per ThingDef
+    private static readonly Dictionary<ThingDef, IntVec3> _lastKnownStoragePos = new(32);
+
     public override void ExposeData()
     {
         base.ExposeData();
@@ -102,41 +105,108 @@ public sealed class JobDriver_UnloadYourHauledInventory : JobDriver
 
                 Log.Info($"[Unload] Trying to find storage for {unloadable.LabelShort} x{unloadable.stackCount}");
 
-                if (!StoreUtility.TryFindBestBetterStorageFor(
+                // Try to find ideal storage
+                if (StoreUtility.TryFindBestBetterStorageFor(
                         unloadable, pawn, pawn.Map, StoragePriority.Unstored,
                         pawn.Faction, out var cell, out var destination))
                 {
-                    HandleNoStorage(unloadable, comp, inventory, loopBack);
+                    Log.Info($"[Unload] Found storage at {cell} / {destination}");
+
+                    if (cell.IsValid)
+                        _lastKnownStoragePos[unloadable.def] = cell;
+
+                    job.SetTarget(TargetIndex.A, unloadable);
+                    job.SetTarget(TargetIndex.B,
+                        cell == IntVec3.Invalid ? (LocalTargetInfo)(Thing)destination! : cell);
+
+                    if (!pawn.Map.reservationManager.Reserve(pawn, job, job.targetB))
+                    {
+                        if (!TryFindAlternativeCell(unloadable, out var altCell)
+                            || !pawn.Map.reservationManager.Reserve(pawn, job, altCell))
+                        {
+                            DropAtFeet(unloadable, comp, inventory, loopBack);
+                            return;
+                        }
+                        job.SetTarget(TargetIndex.B, altCell);
+                        _lastKnownStoragePos[unloadable.def] = altCell;
+                    }
+
+                    _countToDrop = unloadable.stackCount;
                     return;
                 }
 
-                Log.Info($"[Unload] Found storage at {cell} / {destination}");
+                // Fallback: try last known position for this def
+                if (Settings.DropNearStorage && TryUseLastKnownPosition(unloadable))
+                    return;
 
-                job.SetTarget(TargetIndex.A, unloadable);
-                job.SetTarget(TargetIndex.B,
-                    cell == IntVec3.Invalid ? (LocalTargetInfo)(Thing)destination! : cell);
-
-                if (!pawn.Map.reservationManager.Reserve(pawn, job, job.targetB))
-                {
-                    if (!TryFindAlternativeCell(unloadable, out var altCell)
-                        || !pawn.Map.reservationManager.Reserve(pawn, job, altCell))
-                    {
-                        HandleNoStorage(unloadable, comp, inventory, loopBack);
-                        return;
-                    }
-                    job.SetTarget(TargetIndex.B, altCell);
-                }
-
-                _countToDrop = unloadable.stackCount;
+                // Final fallback: drop at feet
+                DropAtFeet(unloadable, comp, inventory, loopBack);
             }
         };
+    }
+
+    /// <summary>
+    /// Tries to use cached storage position for this thing's def.
+    /// </summary>
+    private bool TryUseLastKnownPosition(Thing thing)
+    {
+        if (!_lastKnownStoragePos.TryGetValue(thing.def, out var lastPos))
+            return false;
+
+        if (!lastPos.IsValid || !lastPos.InBounds(pawn.Map))
+            return false;
+
+        if (!pawn.CanReach(lastPos, PathEndMode.ClosestTouch, Danger.Some))
+            return false;
+
+        // WHY: Only use if zone still accepts this thing type
+        var slotGroup = lastPos.GetSlotGroup(pawn.Map);
+        if (slotGroup?.parent?.Accepts(thing) != true)
+            return false;
+
+        Log.Info($"[Unload] Using last known storage pos {lastPos} for {thing.LabelShort}");
+        job.SetTarget(TargetIndex.A, thing);
+        job.SetTarget(TargetIndex.B, lastPos);
+        _countToDrop = thing.stackCount;
+        return true;
+    }
+
+    /// <summary>
+    /// Drops thing at pawn's feet and continues to next item.
+    /// </summary>
+    private void DropAtFeet(Thing thing, CompHauledToInventory comp, ThingOwner inventory, Toil loopBack)
+    {
+        Log.Info($"[Unload] No storage for {thing.LabelShort}, dropping at feet");
+
+        var thingDef = thing.def;
+        comp.GetHashSet().Remove(thing);
+
+        inventory.TryDrop(thing, pawn.Position, pawn.Map, ThingPlaceMode.Near, thing.stackCount, out _);
+
+        var hasMoreTracked = comp.GetHashSet().Any(t =>
+            t != null && !t.Destroyed && t.def == thingDef && inventory.Contains(t));
+
+        if (!hasMoreTracked)
+            comp.UntrackDef(thingDef);
+
+        if (comp.GetHashSet().Count > 0)
+        {
+            Log.Info($"[Unload] {comp.GetHashSet().Count} items remaining, looping back");
+            pawn.jobs.curDriver.JumpToToil(loopBack);
+        }
+        else
+        {
+            Log.Info("[Unload] All items processed, ending job");
+            comp.ClearTracking();
+            EndJobWith(JobCondition.Succeeded);
+        }
     }
 
     private static void SyncTrackedItems(CompHauledToInventory comp, ThingOwner inventory)
     {
         var trackedItems = comp.GetHashSet();
-
         var staleDefs = new HashSet<ThingDef>();
+
         foreach (var item in trackedItems)
         {
             if (item == null || item.Destroyed || !inventory.Contains(item))
@@ -168,35 +238,6 @@ public sealed class JobDriver_UnloadYourHauledInventory : JobDriver
         }
     }
 
-    private void HandleNoStorage(Thing thing, CompHauledToInventory comp, ThingOwner inventory, Toil loopBack)
-    {
-        Log.Info($"[Unload] No storage for {thing.LabelShort}, dropping");
-
-        var thingDef = thing.def;
-        comp.GetHashSet().Remove(thing);
-
-        inventory.TryDrop(thing, pawn.Position, pawn.Map,
-            ThingPlaceMode.Near, thing.stackCount, out _);
-
-        var hasMoreTracked = comp.GetHashSet().Any(t =>
-            t != null && !t.Destroyed && t.def == thingDef && inventory.Contains(t));
-
-        if (!hasMoreTracked)
-            comp.UntrackDef(thingDef);
-
-        if (comp.GetHashSet().Count > 0)
-        {
-            Log.Info($"[Unload] {comp.GetHashSet().Count} items remaining, looping back");
-            pawn.jobs.curDriver.JumpToToil(loopBack);
-        }
-        else
-        {
-            Log.Info("[Unload] All items processed, ending job");
-            comp.ClearTracking();
-            EndJobWith(JobCondition.Succeeded);
-        }
-    }
-
     private Toil PullItemFromInventory(CompHauledToInventory comp, Toil wait)
     {
         return new Toil
@@ -218,8 +259,8 @@ public sealed class JobDriver_UnloadYourHauledInventory : JobDriver
                     comp.GetHashSet().Remove(thing);
                     inventory.TryDrop(thing, ThingPlaceMode.Near, _countToDrop, out _);
 
-                    var hasMore = comp.GetHashSet().Any(t => t?.def == thing.def);
-                    if (!hasMore) comp.UntrackDef(thing.def);
+                    if (!comp.GetHashSet().Any(t => t?.def == thing.def))
+                        comp.UntrackDef(thing.def);
 
                     EndJobWith(JobCondition.Succeeded);
                     return;
@@ -233,8 +274,7 @@ public sealed class JobDriver_UnloadYourHauledInventory : JobDriver
                 job.count = _countToDrop;
                 job.SetTarget(TargetIndex.A, thing);
 
-                var hasMoreTracked = comp.GetHashSet().Any(t => t?.def == thingDef);
-                if (!hasMoreTracked)
+                if (!comp.GetHashSet().Any(t => t?.def == thingDef))
                     comp.UntrackDef(thingDef);
 
                 if (ModCompatibility.CombatExtendedIsActive)
@@ -248,4 +288,9 @@ public sealed class JobDriver_UnloadYourHauledInventory : JobDriver
     private bool TryFindAlternativeCell(Thing thing, out IntVec3 cell) =>
         StoreUtility.TryFindBestBetterStoreCellFor(
             thing, pawn, pawn.Map, StoragePriority.Unstored, pawn.Faction, out cell);
+
+    /// <summary>
+    /// Clears cached storage positions. Call on map change.
+    /// </summary>
+    public static void ClearCache() => _lastKnownStoragePos.Clear();
 }

@@ -12,15 +12,15 @@ public static class HarmonyPatches
 {
     #region Static Fields
 
-    private static readonly HashSet<int> _expandedJobs = new();
+    private static readonly HashSet<int> _expandedJobs = [];
     private static Func<Pawn, Thing, bool, Job>? _haulToInventoryJob;
 
     // Butcher product cache
-    private static readonly Dictionary<int, List<Thing>> _butcherProducts = new();
+    private static readonly Dictionary<int, List<Thing>> _butcherProducts = [];
 
     // Pending delayed triggers
-    private static readonly Dictionary<int, (Pawn pawn, IntVec3 pos, int tick)> _pendingDeconstructs = new();
-    private static readonly Dictionary<int, (Pawn pawn, IntVec3 pos, int tick)> _pendingMining = new();
+    private static readonly Dictionary<int, (Pawn pawn, IntVec3 pos, int tick)> _pendingDeconstructs = [];
+    private static readonly Dictionary<int, (Pawn pawn, IntVec3 pos, int tick)> _pendingMining = [];
 
     // Haul overlay cache
     private static readonly Dictionary<Thing, Pawn> _haulCache = new(64);
@@ -48,7 +48,7 @@ public static class HarmonyPatches
         PatchAutoHaulTriggers(harmony);
         PatchOverlay(harmony);
 
-        Log.Info("[SmartHaul] v1.1 loaded!");
+        Log.Info("[SmartHaul] v1.1.1 loaded!");
     }
 
     private static void PatchCoreSystems(Harmony harmony)
@@ -96,6 +96,10 @@ public static class HarmonyPatches
         harmony.Patch(
             AccessTools.Method(typeof(JobGiver_Haul), nameof(JobGiver_Haul.TryGiveJob)),
             transpiler: new HarmonyMethod(typeof(HarmonyPatches), nameof(JobGiver_Haul_TryGiveJob_Transpiler)));
+
+        harmony.Patch(
+            AccessTools.Method(typeof(Game), nameof(Game.LoadGame)),
+            postfix: new HarmonyMethod(typeof(HarmonyPatches), nameof(Game_LoadGame_Postfix)));
     }
 
     private static void PatchAutoHaulTriggers(Harmony harmony)
@@ -265,7 +269,7 @@ public static class HarmonyPatches
 
         var pawnId = worker.thingIDNumber;
         if (!_butcherProducts.ContainsKey(pawnId))
-            _butcherProducts[pawnId] = new List<Thing>();
+            _butcherProducts[pawnId] = [];
 
         _butcherProducts[pawnId].Add(__result);
         ThingProtection.Protect(__result);
@@ -318,9 +322,19 @@ public static class HarmonyPatches
             if (pawn.CurJobDef == JobDefOf.HaulToCell)
                 pawn.jobs.EndCurrentJob(JobCondition.InterruptForced, false);
 
-            var hasMoreWork = pawn.jobs?.jobQueue?.Any(qj => qj.job?.def == JobDefOf.DoBill) ?? false;
-            AutoHaulTriggers.CheckAndUnload(pawn, effectiveWorkType, hasMoreWork);
+            // WHY: isRecipeWork=true means "only unload if heavy enough"
+            // This lets pawn batch-process multiple carcasses
+            AutoHaulTriggers.CheckAndUnload(pawn, effectiveWorkType, isRecipeWork: true);
         };
+    }
+
+    /// <summary>
+    /// Clears caches when loading a game.
+    /// </summary>
+    public static void Game_LoadGame_Postfix()
+    {
+        JobDriver_UnloadYourHauledInventory.ClearCache();
+        ThingProtection.Reset();
     }
 
     #endregion
@@ -456,7 +470,7 @@ public static class HarmonyPatches
 
             var best = candidates[bestIdx];
             var plantMass = EstimatePlantHarvestMass(best);
-            
+
             if (currentMass + plantMass > availableMass)
             {
                 candidates.RemoveAt(bestIdx);
@@ -715,7 +729,7 @@ public static class HarmonyPatches
         if (comp == null) return;
 
         if (__instance.job.haulMode == HaulMode.ToCellStorage
-            && pawn!.Faction == Faction.OfPlayerSilentFail
+            && pawn!.Faction != null && pawn.Faction.IsPlayer
             && Settings.IsAllowedRace(pawn.RaceProps)
             && (Settings.AllowCorpses || pawn.carryTracker.CarriedThing is not Corpse)
             && comp.GetHashSet().Count > 0)
