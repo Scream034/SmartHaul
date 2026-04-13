@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+
+  <!-- Enable toggles -->
+  <SmartHaul_EnableHeader>Enable for work types</SmartHaul_EnableHeader>
+  <SmartHaul_EnableHarvest>Harvesting</SmartHaul_EnableHarvest>
+  <SmartHaul_EnableHarvest_Desc>Pick up items after harvesting plants.</SmartHaul_EnableHarvest_Desc>
+  <SmartHaul_EnableMining>Mining</SmartHaul_EnableMining>
+  <SmartHaul_EnableMining_Desc>Pick up items after mining ore and stone.</SmartHaul_EnableMining_Desc>
+  <SmartHaul_EnableDeconstruct>Deconstruction</SmartHaul_EnableDeconstruct>
+  <SmartHaul_EnableDeconstruct_Desc>Pick up items after deconstructing buildings.</SmartHaul_EnableDeconstruct_Desc>
+  <SmartHaul_EnableFloorRemoval>Floor removal</SmartHaul_EnableFloorRemoval>
+  <SmartHaul_EnableFloorRemoval_Desc>Pick up items after removing floor coverings.</SmartHaul_EnableFloorRemoval_Desc>
+  <SmartHaul_EnableCrafting>Crafting and cooking</SmartHaul_EnableCrafting>
+  <SmartHaul_EnableCrafting_Desc>Pick up products after completing recipes (butchering, crafting, cooking).</SmartHaul_EnableCrafting_Desc>
+
+  <!-- Chunks -->
+  <SmartHaul_CollectChunks>Collect chunks and rubble</SmartHaul_CollectChunks>
+  <SmartHaul_CollectChunks_Desc>Enable picking up stone chunks and rubble into inventory.</SmartHaul_CollectChunks_Desc>
+
+  <!-- Behavior -->
+  <SmartHaul_BehaviorHeader>Hauling behavior</SmartHaul_BehaviorHeader>
+  <SmartHaul_ImmediateHaulCrafting>Haul immediately (crafting)</SmartHaul_ImmediateHaulCrafting>
+  <SmartHaul_ImmediateHaulCrafting_Desc>After each completed recipe, immediately haul products to storage.</SmartHaul_ImmediateHaulCrafting_Desc>
+  <SmartHaul_ImmediateHaulFarming>Haul immediately (farming)</SmartHaul_ImmediateHaulFarming>
+  <SmartHaul_ImmediateHaulFarming_Desc>After each plant harvest, immediately haul yield to storage.</SmartHaul_ImmediateHaulFarming_Desc>
+  <SmartHaul_Threshold>Inventory threshold: {0}</SmartHaul_Threshold>
+  <SmartHaul_ThresholdHint>Pawn hauls to storage when inventory reaches this fill level.</SmartHaul_ThresholdHint>
+
+  <!-- Behavior descriptions -->
+  <SmartHaul_BehaviorMining>Mining/deconstruction: pile nearby, haul to storage when full.</SmartHaul_BehaviorMining>
+  <SmartHaul_BehaviorFarming>Farming: haul to storage immediately or at threshold.</SmartHaul_BehaviorFarming>
+  <SmartHaul_BehaviorCrafting>Crafting: haul to storage immediately or at threshold.</SmartHaul_BehaviorCrafting>
+
+  <!-- Smart Hauling -->
+  <SmartHaul_SmartHaulHeader>Smart Hauling</SmartHaul_SmartHaulHeader>
+  <SmartHaul_EnableSmartHauling>Enable Smart Hauling</SmartHaul_EnableSmartHauling>
+  <SmartHaul_EnableSmartHauling_Desc>Pawns pick up nearby items while hauling instead of one stack at a time.</SmartHaul_EnableSmartHauling_Desc>
+  <SmartHaul_SmartHaulAutoHaul>Replace Auto-Haul Jobs</SmartHaul_SmartHaulAutoHaul>
+  <SmartHaul_SmartHaulAutoHaul_Desc>Automatically use smart hauling for work-assigned haul jobs. Disable to use smart hauling only via right-click menu.</SmartHaul_SmartHaulAutoHaul_Desc>
+  <SmartHaul_HaulPickupRadius>Haul pickup radius: {0} cells</SmartHaul_HaulPickupRadius>
+
+  <!-- Float Menu -->
+  <SmartHaul_FloatMenu_HaulSmart>Haul smart: {0}</SmartHaul_FloatMenu_HaulSmart>
+  <SmartHaul_FloatMenu_Forbidden>forbidden</SmartHaul_FloatMenu_Forbidden>
+  <SmartHaul_FloatMenu_Reserved>reserved</SmartHaul_FloatMenu_Reserved>
+  <SmartHaul_FloatMenu_AlreadyStored>already stored</SmartHaul_FloatMenu_AlreadyStored>
+  <SmartHaul_FloatMenu_NoStorage>no storage</SmartHaul_FloatMenu_NoStorage>
+
+</LanguageData>

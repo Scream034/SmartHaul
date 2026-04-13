@@ -1,4 +1,4 @@
-# Smart Haul ![Version](https://img.shields.io/badge/version-1.1.0-blue) ![RimWorld](https://img.shields.io/badge/RimWorld-1.6-green)
+# Smart Haul ![Version](https://img.shields.io/badge/version-1.3.0-blue) ![RimWorld](https://img.shields.io/badge/RimWorld-1.6-green)
 
 [English](#english) | [Русский](#русский)
 
@@ -7,81 +7,75 @@
 ## English
 
 ### About
-**Smart Haul** is a fork of [Pick Up and Haul](https://steamcommunity.com/sharedfiles/filedetails/?id=1279012058) by Mehni, rebuilt from the ground up. Pawns use their inventory to carry multiple items per trip instead of one-at-a-time vanilla hauling. But that's just the beginning — Smart Haul also auto-collects products from work: harvesting, deconstructing, mining, butchering, and floor removal.
+**Smart Haul** is a performance-focused fork of [Pick Up and Haul](https://steamcommunity.com/sharedfiles/filedetails/?id=1279012058), rebuilt for RimWorld 1.6 with multiplayer support. Pawns use their inventory to carry multiple items per trip, and automatically collect products from work (mining, harvesting, deconstructing, butchering).
 
 ### Compatibility
 * **RimWorld:** 1.6+
-* **Multiplayer:** Fully compatible with [RimWorld Multiplayer](https://github.com/rwmt/Multiplayer). All jobs, reservations and item tracking are deterministic and sync-safe.
-* **Mods:** Works with Combat Extended, Allow Tool, Extended Storage / LWM's Deep Storage, and most other mods.
+* **Multiplayer:** Fully compatible with [RimWorld Multiplayer](https://github.com/rwmt/Multiplayer). All jobs are deterministic and sync-safe.
+* **Mods:** Works with Combat Extended, Allow Tool, Deep Storage, and most other mods.
 * **Save-safe:** Can be added or removed mid-save.
 
 ### ⚙️ Settings
-Everything is configurable via **Options → Mod Settings → Smart Haul**:
+**Options → Mod Settings → Smart Haul:**
 
-* **Auto-haul triggers** — toggle and fine-tune auto-collection after deconstruct, mining, butchering, harvesting
-* **Smart cleanup** — respect work priorities (drop at feet vs. haul to storage)
-* **Route building** — search radius, max items per trip, rot urgency
-* **Visual overlay** — see who's hauling what with route lines and hauler names
-* **Cooperation** — nearby idle pawns help when your hauler's inventory is full
+* **Work Types** — toggle auto-collection for Mining, Deconstruct, Harvest, Crafting, Floor removal
+* **Smart Hauling** — enable multi-item hauling with configurable pickup radius (default 10 cells)
+* **Inventory Threshold** — when to haul collected items (80% default for work, 100% for hauling jobs)
+* **Chunks** — option to ignore stone chunks
 
-### 💡 Key Features
+### 💡 Features
 
-* **Inventory hauling** — pawns stuff multiple items into inventory, carry them all at once to storage
-* **Smart routing** — nearest-neighbor algorithm builds efficient pickup routes
-* **Auto-collect after work** — deconstructing a wall? Pawn grabs materials automatically. Harvesting? Crops go straight to inventory
-* **Item protection** — other haulers won't steal items your worker is about to pick up
-* **Safe inventory** — personal items (weapons, medicine "carry X"), inventory stock are never touched
-* **Overflow handling** — storage full? Items are dropped at feet, pawn continues with the rest
-* **Save/load safe** — all tracking survives save, load, and even mid-job saves
+* **Multi-item hauling** — pawns pick up nearby haulables into inventory, deliver all at once
+* **Auto-collection** — after mining ore, harvesting crops, or butchering, pawn automatically grabs products
+* **Smart priority** — perishable food collected first, then items for same storage, then others
+* **Work integration** — seamlessly integrates with vanilla job system via WorkGiver
+* **Draft drop** — drops collected items when drafted (R key)
+* **Safe inventory** — never touches personal gear, weapons, or inventory stock settings
 
 ### 🛠️ Installation
 1. Install **[Harmony](https://steamcommunity.com/sharedfiles/filedetails/?id=2009463077)**
-2. Subscribe to Smart Haul or place the mod folder into `RimWorld/Mods/`
-3. Enable in mod list, load **after Harmony**
-4. That's it — works immediately, no restart required for existing saves
+2. Subscribe or extract to `RimWorld/Mods/`
+3. Enable after Harmony in mod list
+4. Works immediately on existing saves
 
 ---
 
 ## Русский
 
 ### О моде
-**Smart Haul** — это форк [Pick Up and Haul](https://steamcommunity.com/sharedfiles/filedetails/?id=1279012058) от Mehni, переписанный с нуля. Пешки используют инвентарь чтобы нести несколько предметов за раз вместо ванильной переноски по одному. Но это только начало — Smart Haul также автоматически собирает продукты работы: урожай, материалы от разбора, руду, мясо и ресурсы от снятия покрытий.
+**Smart Haul** — форк [Pick Up and Haul](https://steamcommunity.com/sharedfiles/filedetails/?id=1279012058), переписанный для RimWorld 1.6 с поддержкой мультиплеера. Пешки несут несколько предметов в инвентаре за раз и автоматически собирают продукты работы (руда, урожай, разделка).
 
 ### Совместимость
 * **RimWorld:** 1.6+
-* **Мультиплеер:** Полная совместимость с [RimWorld Multiplayer](https://github.com/rwmt/Multiplayer). Все задачи, резервации и отслеживание предметов детерминированы и безопасны для синхронизации.
-* **Моды:** Работает с Combat Extended, Allow Tool, Extended Storage / LWM's Deep Storage и большинством других модов.
-* **Безопасен для сохранений:** Можно добавлять и убирать в любой момент.
+* **Мультиплеер:** Полная совместимость с [RimWorld Multiplayer](https://github.com/rwmt/Multiplayer)
+* **Моды:** Работает с Combat Extended, Allow Tool, Deep Storage
+* **Безопасен для сохранений:** Можно добавить/убрать в любой момент
 
 ### ⚙️ Настройки
-Всё настраивается через **Настройки → Моды → Smart Haul**:
+**Настройки → Моды → Smart Haul:**
 
-* **Авто-сбор** — включить/выключить и настроить сбор после разбора, добычи, разделки, урожая
-* **Умная уборка** — учёт приоритетов работ (бросить на пол vs. нести на склад)
-* **Построение маршрута** — радиус поиска, макс. предметов за рейс, срочность гниющего
-* **Визуальное отображение** — линии маршрута и имена носильщиков под предметами
-* **Кооперация** — ближайшие бездельники помогают когда инвентарь полон
+* **Типы работ** — включить авто-сбор для Добычи, Разбора, Урожая, Крафта, Снятия пола
+* **Умная переноска** — перенос нескольких предметов с настраиваемым радиусом (по умолчанию 10 клеток)
+* **Порог инвентаря** — когда нести собранное (80% по умолчанию)
+* **Камни** — опция игнорировать каменные обломки
 
-### 💡 Ключевые фишки
+### 💡 Возможности
 
-* **Переноска через инвентарь** — пешки набивают карманы и несут всё разом на склад
-* **Умный маршрут** — алгоритм ближайшего соседа строит эффективный путь сбора
-* **Авто-сбор после работы** — разбираешь стену? Пешка сама подберёт материалы. Собираешь урожай? Картошка летит прямо в инвентарь
-* **Защита предметов** — другие носильщики не украдут то, что ваш рабочий сейчас подберёт
-* **Безопасный инвентарь** — личные вещи (оружие, лекарства "носить с собой") никогда не выгружаются
-* **Обработка переполнения** — склад полон? Предметы падают на пол, пешка продолжает с остальными
-* **Устойчивость** — всё отслеживание переживает сохранение, загрузку и даже сохранение посреди задачи
+* **Мульти-переноска** — пешка подбирает ближайшие предметы в инвентарь и несёт всё разом
+* **Авто-сбор** — после добычи руды, сбора урожая или разделки пешка автоматически забирает продукты
+* **Умный приоритет** — сначала скоропорт, затем предметы на тот же склад, затем остальное
+* **Интеграция** — работает через систему WorkGiver, совместимо с приоритетами работ
+* **Сброс при призыве** — выгружает предметы при нажатии R (призыв)
+* **Безопасность** — никогда не трогает личное снаряжение и оружие
 
 ### 🛠️ Установка
 1. Установите **[Harmony](https://steamcommunity.com/sharedfiles/filedetails/?id=2009463077)**
-2. Подпишитесь на Smart Haul или поместите папку мода в `RimWorld/Mods/`
-3. Включите в списке модов, загружайте **после Harmony**
-4. Готово — работает сразу, перезапуск для существующих сохранений не нужен
+2. Подпишитесь или распакуйте в `RimWorld/Mods/`
+3. Включите после Harmony в списке модов
+4. Работает сразу на существующих сохранениях
 
 ---
 
 ### Credits
 * **Mehni** — original Pick Up and Haul
-* **paralax034** — Smart Haul fork, rewrite and new features
-
-[English](#english) | [Русский](#русский)
+* **paralax034** — Smart Haul fork, rewrite for 1.6, MP compatibility

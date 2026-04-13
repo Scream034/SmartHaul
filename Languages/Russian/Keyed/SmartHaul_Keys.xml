@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+
+  <!-- Enable toggles -->
+  <SmartHaul_EnableHeader>Включить для типов работ</SmartHaul_EnableHeader>
+  <SmartHaul_EnableHarvest>Сбор урожая</SmartHaul_EnableHarvest>
+  <SmartHaul_EnableHarvest_Desc>Подбирать предметы после сбора урожая и рубки растений.</SmartHaul_EnableHarvest_Desc>
+  <SmartHaul_EnableMining>Добыча</SmartHaul_EnableMining>
+  <SmartHaul_EnableMining_Desc>Подбирать предметы после добычи руды и камня.</SmartHaul_EnableMining_Desc>
+  <SmartHaul_EnableDeconstruct>Разборка</SmartHaul_EnableDeconstruct>
+  <SmartHaul_EnableDeconstruct_Desc>Подбирать предметы после разборки построек.</SmartHaul_EnableDeconstruct_Desc>
+  <SmartHaul_EnableFloorRemoval>Снятие пола</SmartHaul_EnableFloorRemoval>
+  <SmartHaul_EnableFloorRemoval_Desc>Подбирать предметы после снятия покрытия пола.</SmartHaul_EnableFloorRemoval_Desc>
+  <SmartHaul_EnableCrafting>Крафт и готовка</SmartHaul_EnableCrafting>
+  <SmartHaul_EnableCrafting_Desc>Подбирать продукты после завершения рецептов (разделка, крафт, готовка).</SmartHaul_EnableCrafting_Desc>
+
+  <!-- Chunks -->
+  <SmartHaul_CollectChunks>Подбирать камни и обломки</SmartHaul_CollectChunks>
+  <SmartHaul_CollectChunks_Desc>Включить подбор каменных блоков и обломков в инвентарь.</SmartHaul_CollectChunks_Desc>
+
+  <!-- Behavior -->
+  <SmartHaul_BehaviorHeader>Поведение переноски</SmartHaul_BehaviorHeader>
+  <SmartHaul_ImmediateHaulCrafting>Сразу нести на склад (крафт)</SmartHaul_ImmediateHaulCrafting>
+  <SmartHaul_ImmediateHaulCrafting_Desc>После каждого выполненного рецепта сразу относить предметы на склад.</SmartHaul_ImmediateHaulCrafting_Desc>
+  <SmartHaul_ImmediateHaulFarming>Сразу нести на склад (урожай)</SmartHaul_ImmediateHaulFarming>
+  <SmartHaul_ImmediateHaulFarming_Desc>После каждого сбора растения сразу относить урожай на склад.</SmartHaul_ImmediateHaulFarming_Desc>
+  <SmartHaul_Threshold>Порог инвентаря: {0}</SmartHaul_Threshold>
+  <SmartHaul_ThresholdHint>При достижении этого заполнения пешка идёт выкладывать предметы.</SmartHaul_ThresholdHint>
+
+  <!-- Behavior descriptions -->
+  <SmartHaul_BehaviorMining>Добыча/разборка: складывать в кучу рядом, нести на склад когда полный.</SmartHaul_BehaviorMining>
+  <SmartHaul_BehaviorFarming>Урожай: нести на склад сразу или по достижению порога.</SmartHaul_BehaviorFarming>
+  <SmartHaul_BehaviorCrafting>Крафт: нести на склад сразу или по достижению порога.</SmartHaul_BehaviorCrafting>
+
+  <!-- Smart Hauling -->
+  <SmartHaul_SmartHaulHeader>Умная переноска</SmartHaul_SmartHaulHeader>
+  <SmartHaul_EnableSmartHauling>Включить умную переноску</SmartHaul_EnableSmartHauling>
+  <SmartHaul_EnableSmartHauling_Desc>Пешки подбирают соседние предметы во время переноски вместо одного стака за раз.</SmartHaul_EnableSmartHauling_Desc>
+  <SmartHaul_SmartHaulAutoHaul>Заменять авто-переноску</SmartHaul_SmartHaulAutoHaul>
+  <SmartHaul_SmartHaulAutoHaul_Desc>Автоматически использовать умную переноску для задач хаулинга. Отключите чтобы использовать только через меню правой кнопки.</SmartHaul_SmartHaulAutoHaul_Desc>
+  <SmartHaul_HaulPickupRadius>Радиус подбора при переноске: {0} кл.</SmartHaul_HaulPickupRadius>
+
+  <!-- Float Menu -->
+  <SmartHaul_FloatMenu_HaulSmart>Перенести умно: {0}</SmartHaul_FloatMenu_HaulSmart>
+  <SmartHaul_FloatMenu_Forbidden>запрещено</SmartHaul_FloatMenu_Forbidden>
+  <SmartHaul_FloatMenu_Reserved>занято</SmartHaul_FloatMenu_Reserved>
+  <SmartHaul_FloatMenu_AlreadyStored>уже на складе</SmartHaul_FloatMenu_AlreadyStored>
+  <SmartHaul_FloatMenu_NoStorage>нет склада</SmartHaul_FloatMenu_NoStorage>
+
+</LanguageData>

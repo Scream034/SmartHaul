@@ -1,195 +1,138 @@
-﻿using System.Linq;
-
 namespace SmartHaul;
 
 /// <summary>
-/// Job driver that picks up multiple items into inventory, then walks to storage.
+/// Job driver: walk to each queued item, pick it up into inventory,
+/// then walk to storage and queue the unload job.
+/// Mirrors PUAH approach: pickup loop → goto storage → queue UnloadInventory.
 /// </summary>
 public sealed class JobDriver_HaulToInventory : JobDriver
 {
-    private CompHauledToInventory? HauledComp => pawn.TryGetComp<CompHauledToInventory>();
+    private CompHauledToInventory Comp => pawn.TryGetComp<CompHauledToInventory>();
 
     public override bool TryMakePreToilReservations(bool errorOnFailed)
     {
-        if (HauledComp == null) return false;
+        if (Comp == null) return false;
         if (job.targetQueueA.NullOrEmpty()) return false;
 
         pawn.ReserveAsManyAsPossible(job.targetQueueA, job);
-        pawn.ReserveAsManyAsPossible(job.targetQueueB, job);
-        return pawn.Reserve(job.targetB, job);
+        return pawn.Reserve(job.targetQueueA[0], job, 1, -1, null, errorOnFailed);
+    }
+
+    public override void Notify_Starting()
+    {
+        base.Notify_Starting();
+
+        // WHY: Drop collected items if the pawn is interrupted before queuing the Unload job.
+        AddFinishAction(condition =>
+        {
+            var comp = pawn.TryGetComp<CompHauledToInventory>();
+            if (comp == null || !comp.HasItems()) return;
+
+            // If the next job is UnloadInventory, we successfully completed HaulToInv.
+            var nextJob = pawn.jobs.jobQueue.Peek();
+            if (nextJob?.job?.def == SmartHaulJobDefOf.SmartHaul_UnloadInventory)
+                return;
+
+            Log.Info($"HaulToInv: {pawn.LabelShort} interrupted ({condition}). Dropping collected items.");
+            InventoryCollector.DropAllCollectedItems(pawn);
+        });
     }
 
     public override IEnumerable<Toil> MakeNewToils()
     {
-        var processNext = ProcessNextTarget();
-        yield return processNext;
+        // --- Extract next target from queue ---
+        var nextTarget = Toils_JobTransforms.ExtractNextTargetFromQueue(TargetIndex.A);
+        yield return nextTarget;
 
-        yield return GotoThingToil(processNext);
-        yield return PickupToil(processNext);
-        yield return Toils_Jump.JumpIf(processNext, () => !job.targetQueueA.NullOrEmpty());
-        yield return GotoStorageToil();
-        yield return QueueUnloadToil();
-    }
+        // --- Walk to item ---
+        var gotoItem = Toils_Goto.GotoThing(TargetIndex.A, PathEndMode.ClosestTouch);
+        gotoItem.FailOnDespawnedNullOrForbidden(TargetIndex.A);
+        yield return gotoItem;
 
-    private Toil ProcessNextTarget()
-    {
-        return new Toil
+        // --- Pick up into inventory ---
+        var pickupToil = ToilMaker.MakeToil("SmartHaul_PickupToInv");
+        pickupToil.initAction = () =>
         {
-            initAction = () =>
+            Log.Info($"HaulToInv: {pawn.LabelShort} picking up {job.targetQueueA.Count + 1} items");
+
+            var actor = pawn;
+            var thing = actor.CurJob.GetTarget(TargetIndex.A).Thing;
+            if (thing == null || thing.Destroyed || !thing.Spawned) return;
+
+            var comp = Comp;
+            if (comp == null)
             {
-                while (job.targetQueueA.Count > 0)
-                {
-                    var target = job.targetQueueA[0];
-                    var count = job.countQueue.Count > 0 ? job.countQueue[0] : -1;
+                EndJobWith(JobCondition.Errored);
+                return;
+            }
 
-                    job.targetQueueA.RemoveAt(0);
-                    if (job.countQueue.Count > 0) job.countQueue.RemoveAt(0);
+            Toils_Haul.ErrorCheckForCarry(actor, thing);
 
-                    var thing = target.Thing;
-                    if (!IsValidTarget(thing)) continue;
-                    if (MassUtility.WillBeOverEncumberedAfterPickingUp(pawn, thing, 1)) break;
+            var countToPickUp = Math.Min(
+                job.count > 0 ? job.count : thing.stackCount,
+                MassUtility.CountToPickUpUntilOverEncumbered(actor, thing));
 
-                    job.SetTarget(TargetIndex.A, thing);
-                    job.count = count > 0 ? count : thing.stackCount;
-                    return;
-                }
+            if (countToPickUp <= 0) return;
 
-                job.targetQueueA.Clear();
-                job.countQueue.Clear();
+            var splitThing = thing.SplitOff(countToPickUp);
+
+            // WHY: Merge with existing stacks of same def in inventory
+            var shouldMerge = false;
+            foreach (var tracked in comp.GetHashSet())
+            {
+                if (tracked?.def == splitThing.def) { shouldMerge = true; break; }
+            }
+
+            actor.inventory.GetDirectlyHeldThings().TryAdd(splitThing, shouldMerge);
+            comp.RegisterHauledItem(splitThing);
+
+            Log.Info($"  +{countToPickUp} {splitThing.def.label}");
+
+            // WHY: If thing still remains on ground (partial pickup), queue vanilla haul
+            // so it doesn't get left behind forever
+            if (thing.Spawned && thing.stackCount > 0)
+            {
+                var remainderJob = HaulAIUtility.HaulToStorageJob(actor, thing, false);
+                if (remainderJob?.TryMakePreToilReservations(actor, false) == true)
+                    actor.jobs.jobQueue.EnqueueFirst(remainderJob, JobTag.Misc);
             }
         };
-    }
+        pickupToil.defaultCompleteMode = ToilCompleteMode.Instant;
+        yield return pickupToil;
 
-    private bool IsValidTarget(Thing? thing)
-    {
-        if (thing == null || !thing.Spawned || thing.Destroyed) return false;
-        if (thing.Map != pawn.Map) return false;
-        if (thing.IsForbidden(pawn)) return false;
-        return pawn.CanReserve(thing) || pawn.Reserve(thing, job, 1, -1, null, false);
-    }
+        // --- Loop if more items in queue ---
+        yield return Toils_Jump.JumpIf(nextTarget, () =>
+            !job.targetQueueA.NullOrEmpty()
+            && !MassUtility.IsOverEncumbered(pawn));
 
-    private Toil GotoThingToil(Toil jumpBackTo)
-    {
-        var toil = new Toil
+        // --- Walk to storage ---
+        yield return job.targetB.HasThing
+            ? Toils_Goto.GotoThing(TargetIndex.B, PathEndMode.ClosestTouch)
+            : Toils_Goto.GotoCell(TargetIndex.B, PathEndMode.ClosestTouch);
+
+        // --- Queue unload job and finish ---
+        var queueUnload = ToilMaker.MakeToil("SmartHaul_QueueUnload");
+        queueUnload.initAction = () =>
         {
-            initAction = () =>
+            var comp = Comp;
+            if (comp == null || !comp.HasItems())
             {
-                var thing = job.GetTarget(TargetIndex.A).Thing;
-                if (!IsValidTarget(thing))
-                {
-                    pawn.jobs.curDriver.JumpToToil(jumpBackTo);
-                    return;
-                }
-                pawn.pather.StartPath(thing, PathEndMode.ClosestTouch);
-            },
-            defaultCompleteMode = ToilCompleteMode.PatherArrival
-        };
-
-        toil.AddFailCondition(() =>
-        {
-            var thing = job.GetTarget(TargetIndex.A).Thing;
-            return !IsValidTarget(thing) && job.targetQueueA.NullOrEmpty();
-        });
-
-        return toil;
-    }
-
-    private Toil PickupToil(Toil jumpBackTo)
-    {
-        return new Toil
-        {
-            initAction = () =>
-            {
-                var thing = job.GetTarget(TargetIndex.A).Thing;
-                if (!IsValidTarget(thing))
-                {
-                    pawn.jobs.curDriver.JumpToToil(jumpBackTo);
-                    return;
-                }
-
-                var comp = HauledComp;
-                if (comp == null)
-                {
-                    Log.Warning($"[SmartHaul] {pawn.LabelShort} has no CompHauledToInventory");
-                    EndJobWith(JobCondition.Errored);
-                    return;
-                }
-
-                Toils_Haul.ErrorCheckForCarry(pawn, thing);
-
-                var wantCount = job.count > 0 ? job.count : thing.stackCount;
-                var canCarry = MassUtility.CountToPickUpUntilOverEncumbered(pawn, thing);
-
-                if (ModCompatibility.CombatExtendedIsActive)
-                    canCarry = Math.Min(canCarry, CompatHelper.CanFitInInventory(pawn, thing));
-
-                var actualCount = Math.Min(Math.Min(wantCount, canCarry), thing.stackCount);
-                if (actualCount <= 0)
-                {
-                    pawn.jobs.curDriver.JumpToToil(jumpBackTo);
-                    return;
-                }
-
-                var splitThing = thing.SplitOff(actualCount);
-                var shouldMerge = comp.GetHashSet().Any(x => x?.def == splitThing.def);
-                pawn.inventory.GetDirectlyHeldThings().TryAdd(splitThing, shouldMerge);
-                comp.RegisterHauledItem(splitThing);
-
-                ThingProtection.Unprotect(thing);
-
-                if (ModCompatibility.CombatExtendedIsActive)
-                    CompatHelper.UpdateInventory(pawn);
-            }
-        };
-    }
-
-    private Toil GotoStorageToil()
-    {
-        return new Toil
-        {
-            initAction = () =>
-            {
-                var comp = HauledComp;
-                if (comp == null || comp.GetHashSet().Count == 0)
-                {
-                    EndJobWith(JobCondition.Succeeded);
-                    return;
-                }
-
-                var target = job.targetB;
-                pawn.pather.StartPath(
-                    target.HasThing ? (LocalTargetInfo)target.Thing : target.Cell,
-                    PathEndMode.ClosestTouch);
-            },
-            defaultCompleteMode = ToilCompleteMode.PatherArrival
-        };
-    }
-
-    private Toil QueueUnloadToil()
-    {
-        return new Toil
-        {
-            initAction = () =>
-            {
-                var comp = HauledComp;
-                if (comp == null || comp.GetHashSet().Count == 0)
-                {
-                    EndJobWith(JobCondition.Succeeded);
-                    return;
-                }
-
-                var unloadJob = JobMaker.MakeJob(SmartHaulJobDefOf.UnloadYourHauledInventory, job.targetB);
-                if (unloadJob.TryMakePreToilReservations(pawn, false))
-                    pawn.jobs.jobQueue.EnqueueFirst(unloadJob, JobTag.Misc);
-
-                if (!job.targetQueueA.NullOrEmpty() && job.targetQueueA.Count > 0)
-                {
-                    var lastPos = job.targetQueueA[^1].Thing?.Position ?? pawn.Position;
-                    AutoHaulTriggers.NotifyNearbyPawns(pawn, lastPos, pawn.Map);
-                }
-
                 EndJobWith(JobCondition.Succeeded);
+                return;
             }
+
+            var unloadJob = JobMaker.MakeJob(
+                SmartHaulJobDefOf.SmartHaul_UnloadInventory, job.targetB);
+
+            if (unloadJob.TryMakePreToilReservations(pawn, false))
+            {
+                pawn.jobs.jobQueue.EnqueueFirst(unloadJob, JobTag.Misc);
+                Log.Info($"HaulToInv: {pawn.LabelShort} queued unload");
+            }
+
+            EndJobWith(JobCondition.Succeeded);
         };
+        queueUnload.defaultCompleteMode = ToilCompleteMode.Instant;
+        yield return queueUnload;
     }
 }

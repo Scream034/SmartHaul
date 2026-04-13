@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
-	<name>Smart Haul (fork of Pick up and Haul)</name>
+	<name>Smart Haul</name>
 	<author>paralax034 (original: Mehni)</author>
 	<supportedVersions>
 		<li>1.6</li>
@@ -19,11 +19,18 @@
 	<loadAfter>
 		<li>brrainz.harmony</li>
 	</loadAfter>
-	<url>https://ludeon.com/forums/index.php?topic=35832</url>
-	<description> I like this mod! (This is fork of Pick up and Haul by Mehni)
+	<url>https://github.com/paralax034/SmartHaul</url>
+	<description>Smart Haul - Intelligent inventory hauling and auto-collection for RimWorld 1.6.
 
-This mod makes pawns haul things more intelligently. When hauling things to a stockpile, they will pick up all available items on the way, up to their carrying capacity. This makes hauling much more efficient. Highlight.
+Pawns carry multiple items in their inventory per trip instead of one at a time. Automatically collects products from mining, harvesting, deconstructing, and crafting. Multiplayer compatible.
 
-</description>
-	<modVersion IgnoreIfNoMatchingField="True">1.1.1</modVersion>
+Features:
+• Multi-item hauling with priority sorting (perishables first)
+• Auto-collection after work (mining, harvest, butcher, deconstruct)
+• Configurable pickup radius and inventory thresholds
+• Full Multiplayer compatibility
+• Safe inventory management (never touches personal gear)
+
+This is a complete rewrite/fork of "Pick Up and Haul" by Mehni, optimized for RimWorld 1.6 and multiplayer.</description>
+	<modVersion IgnoreIfNoMatchingField="True">1.3.0</modVersion>
 </ModMetaData>

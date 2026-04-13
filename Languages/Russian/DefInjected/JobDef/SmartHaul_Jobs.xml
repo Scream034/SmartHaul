@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <SmartHaul_UnloadToStorage.reportString>несёт собранные предметы на склад.</SmartHaul_UnloadToStorage.reportString>
+  <SmartHaul_HaulToInventory.reportString>собирает предметы для переноски.</SmartHaul_HaulToInventory.reportString>
+  <SmartHaul_UnloadInventory.reportString>выгружает предметы на склад.</SmartHaul_UnloadInventory.reportString>
+</LanguageData>

@@ -24,7 +24,7 @@ for ($i = 1; $i -le $Clients; $i++) {
     Write-Host "  Client $i started (PID: $($proc.Id))" -ForegroundColor Green
     
     if ($i -lt $Clients) {
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 6
     }
 }
 

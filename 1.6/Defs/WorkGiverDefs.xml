@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <WorkGiverDef>
+    <defName>SmartHaul_HaulToInventory</defName>
+    <label>smart haul to inventory</label>
+    <giverClass>SmartHaul.WorkGiver_SmartHaul</giverClass>
+    <workType>Hauling</workType>
+    <verb>haul</verb>
+    <gerund>hauling</gerund>
+    <!-- WHY: Higher than vanilla HaulGeneral (priority 11) so we take over hauling -->
+    <priorityInType>18</priorityInType>
+    <requiredCapacities>
+      <li>Manipulation</li>
+    </requiredCapacities>
+  </WorkGiverDef>
+</Defs>

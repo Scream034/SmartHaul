@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <JobDef>
+    <defName>SmartHaul_UnloadToStorage</defName>
+    <driverClass>SmartHaul.JobDriver_UnloadToStorage</driverClass>
+    <reportString>hauling collected items to storage.</reportString>
+    <casualInterruptible>true</casualInterruptible>
+    <collideWithPawns>false</collideWithPawns>
+    <suspendable>true</suspendable>
+  </JobDef>
+
+  <JobDef>
+    <defName>SmartHaul_HaulToInventory</defName>
+    <driverClass>SmartHaul.JobDriver_HaulToInventory</driverClass>
+    <reportString>gathering items to haul.</reportString>
+    <casualInterruptible>false</casualInterruptible>
+    <suspendable>false</suspendable>
+  </JobDef>
+
+  <JobDef>
+    <defName>SmartHaul_UnloadInventory</defName>
+    <driverClass>SmartHaul.JobDriver_UnloadInventory</driverClass>
+    <reportString>unloading hauled items to storage.</reportString>
+    <casualInterruptible>false</casualInterruptible>
+    <suspendable>false</suspendable>
+  </JobDef>
+</Defs>

@@ -1,69 +1,61 @@
-﻿namespace SmartHaul;
+namespace SmartHaul;
 
 /// <summary>
-/// Tracks which items in pawn's inventory were picked up for hauling by SmartHaul.
-/// <para>
-/// Dual tracking system:
-/// <list type="bullet">
-///   <item><c>_items</c> — exact Thing references for precise identification</item>
-///   <item><c>_trackedDefs</c> — ThingDefs to handle stack merging/splitting</item>
-/// </list>
-/// </para>
+/// ThingComp attached to pawns that tracks items placed into inventory by SmartHaul.
+/// Separates SmartHaul items from personal gear/drugs.
 /// </summary>
 public sealed class CompHauledToInventory : ThingComp
 {
-    private HashSet<Thing> _items = [];
-    private HashSet<ThingDef> _trackedDefs = [];
+    private readonly HashSet<Thing> _hauledItems = new();
 
-    /// <summary>
-    /// Returns tracked items set, cleaning null/destroyed references first.
-    /// </summary>
-    public HashSet<Thing> GetHashSet()
+    /// <summary>Registers a thing as hauled by SmartHaul.</summary>
+    public void RegisterHauledItem(Thing thing)
     {
-        _items.RemoveWhere(static x => x == null || x.Destroyed);
-        return _items;
+        if (thing != null)
+            _hauledItems.Add(thing);
     }
 
-    /// <summary>
-    /// Returns tracked ThingDefs. Survives stack merge/split operations.
-    /// </summary>
-    public HashSet<ThingDef> GetTrackedDefs() => _trackedDefs;
-
-    /// <summary>
-    /// Registers a thing as hauled to inventory.
-    /// </summary>
-    public void RegisterHauledItem(Thing? thing)
+    /// <summary>Unregisters a thing (after placing at storage).</summary>
+    public void UnregisterHauledItem(Thing thing)
     {
-        if (thing == null) return;
-        _items.Add(thing);
-        _trackedDefs.Add(thing.def);
+        _hauledItems.Remove(thing);
     }
 
-    /// <summary>
-    /// Clears all tracking.
-    /// </summary>
-    public void ClearTracking()
+    /// <summary>Returns the tracked set (read-only access for iteration).</summary>
+    public HashSet<Thing> GetHashSet() => _hauledItems;
+
+    /// <summary>Clears all tracking.</summary>
+    public void ClearTracking() => _hauledItems.Clear();
+
+    /// <summary>True if any tracked items exist in pawn inventory.</summary>
+    public bool HasItems()
     {
-        _items.Clear();
-        _trackedDefs.Clear();
+        if (_hauledItems.Count == 0) return false;
+
+        var pawn = parent as Pawn;
+        var inventory = pawn?.inventory?.innerContainer;
+        if (inventory == null) return false;
+
+        foreach (var item in _hauledItems)
+        {
+            if (item != null && !item.Destroyed && inventory.Contains(item))
+                return true;
+        }
+        return false;
     }
 
-    /// <summary>
-    /// Removes tracking for a specific def.
-    /// </summary>
-    public void UntrackDef(ThingDef? def)
+    /// <summary>Removes destroyed/null entries.</summary>
+    public void CleanupDestroyed()
     {
-        if (def == null) return;
-        _trackedDefs.Remove(def);
-        _items.RemoveWhere(t => t?.def == def);
+        _hauledItems.RemoveWhere(t => t == null || t.Destroyed);
     }
 
     public override void PostExposeData()
     {
         base.PostExposeData();
-        Scribe_Collections.Look(ref _items, "ThingsHauledToInventory", LookMode.Reference);
-        Scribe_Collections.Look(ref _trackedDefs, "TrackedDefs", LookMode.Def);
-        _items ??= [];
-        _trackedDefs ??= [];
+        // WHY: Don't save tracked items — they reset on load.
+        // Items in inventory persist naturally; tracking is rebuilt.
+        if (Scribe.mode == LoadSaveMode.PostLoadInit)
+            _hauledItems.Clear();
     }
 }

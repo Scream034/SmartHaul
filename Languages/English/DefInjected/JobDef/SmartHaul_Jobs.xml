@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <SmartHaul_UnloadToStorage.reportString>hauling collected items to storage.</SmartHaul_UnloadToStorage.reportString>
+  <SmartHaul_HaulToInventory.reportString>gathering items to haul.</SmartHaul_HaulToInventory.reportString>
+  <SmartHaul_UnloadInventory.reportString>unloading hauled items to storage.</SmartHaul_UnloadInventory.reportString>
+</LanguageData>
